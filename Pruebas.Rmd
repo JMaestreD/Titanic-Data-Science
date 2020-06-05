@@ -1,0 +1,1104 @@
+---
+title: "Pruebas y recursos sobre kaggle Titanic "
+author: "Javier Maestre Deusto y Miguel López Marzabal"
+date: '`r format(Sys.Date(),"%e de %B, %Y")`'
+output:
+  pdf_document: 
+    toc: yes
+    toc_depth: 3
+  html_document:
+    df_print: paged
+---
+
+\newpage
+
+# Configuración, carga de librerías y definición de funciones.
+
+Realizamos la carga de las librerías necesarias
+```{r load_libraries, echo = TRUE}
+library(knitr)
+library(kableExtra)
+#library(faraway)
+library(tinytex, lib.loc = "/usr/local/lib/R/site-library")
+library(stringr, lib.loc = "/usr/local/lib/R/site-library")
+#library(hms, lib.loc = "/usr/local/lib/R/site-library")
+library(ggplot2, lib.loc = "/usr/local/lib/R/site-library")
+#library(ggpubr)
+library(car)
+library(corrplot) #para los gráficos de correlaciones
+#library(InformationValue)
+#library(cowplot)
+#library(ResourceSelection)
+#library(lmtest, lib.loc = "/usr/local/lib/R/site-library")
+#library(DAAG)
+#library(caret)
+#library(readr)
+library(rpart, lib.loc = "/usr/lib/R/library")
+library(VIM, quietly = TRUE)
+library(randomForest)
+library(party)
+library(dplyr)
+library(FactoMineR)
+library(factoextra)
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## Bajar tamaño fuente del chunk al generar pdf
+## (https://stackoverflow.com/questions/25646333/code-chunk-font-size-in-rmarkdown-with-knitr-and-latex)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```  
+# Lectura y carga de datos de los ficheros
+```{r lectura_fichero, size="small"}
+#leemos el fichero train
+train <- read.csv("titanic/train.csv")
+#leemos el fichero test
+test <- read.csv("titanic/test.csv")
+#mostramos la estructura del dataset para ver tipos de variables
+str(train)
+#mostramos un resumen numérico de las variables del dataset
+summary(train)
+```
+# Pruebas con los datos de origen
+```{r pruebas_mrzs, size="small"}
+
+#juntamos train + test añadiendo a test el campo Survived a Na
+#vamos a trabajar con todos los datos para analizar mejor las variables, corregir y limpiar cualquier cosa 
+muestra<-rbind(train,cbind(test, Survived = rep(NA,418)))
+```
+
+# Trabajo con las diferentes variables
+En este documento vamos a separar el trabajo hecho en cada variable, por tanto irán mezcladas cosas de preprocesado 
+
+## Trabajo con Ticket
+
+```{r pruebas_mrzs_Ticket, size="small"}
+#TRABAJO CON TICKET
+muestra$TktNum <- NA
+# Partimos ticket para obtener el prefijo(o Na si no hay)
+muestra[,c('TktPre','TktNum')] <- str_match(muestra$Ticket, '(.* )?([0-9]+)' ) [,-1]
+
+#vamos a ver relaciones del numero de ticket por tamaño
+tamanoticket<-str_length(muestra$TktNum)
+# hay 4 elementos con NA que tienen ticket LINE y solo ha sobrevivido 1, los ponemos a tamño 0
+tamanoticket[is.na(tamanoticket)]<-0
+#vemos las probabilidades de supervivencia según tamanoticket
+aggregate(Survived ~ tamanoticket, data=muestra, FUN=function(x) {sum(x)/length(x)})
+#vemos cuantos elementos hay en cada uno de los tamaños
+table(tamanoticket)
+#ESTUDIAR SI ES INTERESANTE Y AÑADIR A DATASET
+#muestra$tamanoticket<-tamanoticket
+
+
+#quitamos los signos de puntuacion y caracteres raros de TktPre
+muestra$TktPre <- str_replace_all(str_to_upper(muestra$TktPre), '[.]', '') 
+muestra$TktPre <- str_replace_all(str_to_upper(muestra$TktPre), '[/]', '') 
+muestra$TktPre <- str_replace_all(str_to_upper(muestra$TktPre), ' ', '') 
+#corregimos algunos casos aislados que parecen mal escritos
+muestra$TktPre[muestra$TktPre=='AS']<-'A5'
+#vemos proporcion de supervivencia de los grupos
+aggregate(Survived ~ TktPre, data=muestra, FUN=function(x) {sum(x)/length(x)})
+#mostramos el numero de elementos de cada grupo
+auxtbl<-table(muestra$TktPre)
+auxtbl[order(auxtbl)]
+#ESTUDIAR SI ES INTERESANTE Y AÑADIR A DATASET
+
+
+#cuando varias personas viajan juntas puede que compartan ticket
+tableTickets <- table(muestra$TktNum)
+TicketFreq <- as.numeric(tableTickets[as.character(muestra$TktNum)])
+#Nos vale para ver que personas viajaban solas sin amigos ni familiares
+#mostramos frecuencia de los datos
+table(TicketFreq)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ TicketFreq, FUN=function(x) {sum(x)/length(x)})
+muestra$TicketFreq<-TicketFreq
+#Limpieza
+muestra[is.na(muestra$TicketFreq),]
+muestra$TicketFreq[is.na(muestra$TicketFreq)]<-1
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+```
+
+## Trabajo con Name
+
+```{r pruebas_mrzs_Name, size="small"}
+#TRABAJO CON NAME
+Nombres <- as.character(muestra$Name)
+#Partimos por la coma
+ApellidoYResto<-str_split(Nombres,',',simplify=TRUE)
+#Nos quedamos con el apellido, no hace falta eliminar espacios
+Apellido<-ApellidoYResto[,1]
+#mostramos frecuencia de los datos
+table(Apellido)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ Apellido, FUN=function(x) {sum(x)/length(x)})
+
+
+
+#partimos por el punto y nos quedamos con el título
+Titulo<-str_split(ApellidoYResto[,2],'\\.',simplify=TRUE)[,1]
+#eliminamos el espacio anterior
+Titulo <- sub(' ', '', Titulo)
+#mostramos frecuencia de los datos
+table(Titulo)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ Titulo, FUN=function(x) {sum(x)/length(x)})
+#Vamos a combinar los titulos poco frecuentes en relación a su porcentaje de supervivencia 
+Titulo[Titulo %in% c('Col', 'Major')] <- 'titulogrupo05'
+Titulo[Titulo %in% c('Dona', 'Lady', 'the Countess', 'Mlle', 'Mme', 'Ms', 'Sir')] <- 'titulogrupo1'
+Titulo[Titulo %in% c('Jonkheer', 'Don', 'Capt', 'Rev')] <- 'titulogrupo0'
+# Convert to a factor
+Titulo <- as.factor(Titulo)
+#mostramos frecuencia de los datos
+table(Titulo)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ Titulo, FUN=function(x) {sum(x)/length(x)})
+muestra$Titulo<-Titulo
+
+
+
+#CONSTRUCCION DE FAMILIAS DE PASAJEROS
+#vemos el tamaño de familia de cada individuo
+FamSize <- muestra$SibSp+muestra$Parch + 1
+#mostramos frecuencia de los datos
+table(FamSize)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FamSize, FUN=function(x) {sum(x)/length(x)})
+#parece que hay familias incompletas de 7,6,5,4 miembros!!!!PENSAR COMO RESOLVER ESTO
+muestra$FamSize<-FamSize
+
+
+
+#PASAJEROS QUE VIAJAN SOLOS
+#el tamaño de familia solo nos indica si tiene familia, con esto sabemos si tampoco viajaba con amigos o amante o algo así. 
+LoneWolfs <- FamSize == 1 & TicketFreq==1 
+#mostramos frecuencia de los datos
+table(LoneWolfs)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ LoneWolfs, FUN=function(x) {sum(x)/length(x)})
+#añadimos al dataset
+muestra$LoneWolfs<-LoneWolfs
+#Hay 4 Nas que hay que corregir, viene de Ticket
+muestra[is.na(muestra$LoneWolfs),]
+muestra[is.na(muestra$LoneWolfs),]$TktNum <- 'LINE'
+muestra[is.na(muestra$LoneWolfs),]$TktPre <- 'LINE'
+muestra[is.na(muestra$LoneWolfs),]$LoneWolfs <- TRUE
+
+
+
+
+
+# concatenamos el apellido con el numero de familiares SE AGRUPAN MAL, HAY QUE UNIR NUMERO DE TICKET
+FamilyID <- paste(as.character(FamSize), Apellido, sep="")
+#mostramos frecuencia de los datos
+table(FamilyID)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FamilyID, FUN=function(x) {sum(x)/length(x)})
+#agrupamos las familias pequeñas
+FamilyIDGrouped<-FamilyID
+FamilyIDGrouped[FamSize <= 2] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDGrouped)
+# agrupamos las familias que deberían tener 3 o más familiares pero en el recuento aparecen menos o igual que 2.
+famIDs <- data.frame(table(FamilyIDGrouped))
+famIDs <- famIDs[famIDs$Freq <= 2,]
+FamilyIDGrouped[FamilyIDGrouped %in% famIDs$FamilyIDGrouped] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDGrouped)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FamilyIDGrouped, FUN=function(x) {sum(x)/length(x)})
+#examinamos casos raros, parece que se están mezclando familias porque coincide apellido y numero de familiares
+#igual es mejor usar los grupos de tickets
+muestra[FamilyIDGrouped=='3Brown',] # Hay cuatro personas, por los tickets parece que se juntan dos familias
+muestra[FamilyIDGrouped=='3Davies',] # Hay 5 personas, por los tickets parece que se juntan dos familias
+muestra[FamilyIDGrouped=='7Andersson',] # hay 9, parece que se juntan la familia y dos personas diferentes por los tickets
+# Convertimos a factor
+FamilyIDGrouped <- factor(FamilyIDGrouped)
+
+
+
+# probamos A UNIR NUMERO DE TICKET para obtener mejores grupos familiares
+FamilyIDTK <- paste(as.character(FamSize), Apellido, muestra$TktNum, sep="")
+#mostramos frecuencia de los datos
+table(FamilyIDTK)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FamilyIDTK, FUN=function(x) {sum(x)/length(x)})
+#agrupamos las familias pequeñas
+FamilyIDTKGrouped<-FamilyIDTK
+FamilyIDTKGrouped[FamSize <= 2] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDTKGrouped)
+# agrupamos las familias que deberían tener 3 o más familiares pero en el recuento aparecen menos o igual que 2.
+famIDs <- data.frame(table(FamilyIDTKGrouped))
+famIDs <- famIDs[famIDs$Freq <= 2,]
+FamilyIDTKGrouped[FamilyIDTKGrouped %in% famIDs$FamilyIDTKGrouped] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDTKGrouped)
+#vemos proporcion de supervivencia de las familias
+aggregate(muestra$Survived ~ FamilyIDTKGrouped, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos por numero de miembros
+numerodemiembrosgrupos<-as.numeric(table(FamilyIDTKGrouped)[as.character(FamilyIDTKGrouped)])
+aggregate(muestra$Survived ~ numerodemiembrosgrupos, FUN=function(x) {sum(x)/length(x)})
+# Convertimos a factor
+FamilyIDTKGrouped <- factor(FamilyIDTKGrouped)
+
+
+
+# probamos A UNIR NUMERO DE TICKET para obtener mejores grupos familiares Y AGRUPAMOS DE OTRA FORMA
+FamilyIDTK <- paste(as.character(FamSize), Apellido, muestra$TktNum, sep="")
+#mostramos frecuencia de los datos
+table(FamilyIDTK)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FamilyIDTK, FUN=function(x) {sum(x)/length(x)})
+#agrupamos las familias pequeñas
+FamilyIDTKGrouped<-FamilyIDTK
+FamilyIDTKGrouped[FamSize <= 1] <- 'Alone'
+#vemos cuantas parejas sobrevivieron a medias, todos o ninguno
+coupleSurvRate<-aggregate(muestra$Survived[FamSize ==2] ~ FamilyIDTKGrouped[FamSize ==2], FUN=function(x) {sum(x)/length(x)})
+table(as.factor(coupleSurvRate[,2]))
+#ver si merece la pena usar el porcentaje de supervivencia familiar, hay varias teorías acerca de la supervivencia
+#en funcion de cuantas personas de la familia hayan sobrevivido
+#vamos a crear un porcentaje de supervivencia familiar que nos dice cuantos familiares sobreviven.
+familySurvRate<-aggregate(muestra$Survived ~ FamilyIDTKGrouped, FUN=function(x) {sum(x)/length(x)})
+familySurvRate
+#acortamos más los grupos de edad
+FamilyIDTKGrouped[FamSize == 2] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDTKGrouped)
+# agrupamos las familias que deberían tener 3 o más familiares pero en el recuento no aparecen.
+famIDs <- data.frame(table(FamilyIDTKGrouped))
+Alones <- famIDs[famIDs$Freq <= 1,]
+FamilyIDTKGrouped[FamilyIDTKGrouped %in% Alones$FamilyIDTKGrouped] <- 'Alone'
+Smalls <- famIDs[famIDs$Freq == 2,]
+FamilyIDTKGrouped[FamilyIDTKGrouped %in% Smalls$FamilyIDTKGrouped] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDTKGrouped)
+#vemos proporcion de supervivencia de las familias
+aggregate(muestra$Survived ~ FamilyIDTKGrouped, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos por numero de miembros
+numerodemiembrosgrupos<-as.numeric(table(FamilyIDTKGrouped)[as.character(FamilyIDTKGrouped)])
+aggregate(muestra$Survived ~ numerodemiembrosgrupos, FUN=function(x) {sum(x)/length(x)})
+# Convertimos a factor
+#FamilyIDTKGrouped <- factor(FamilyIDTKGrouped)
+#añadimos al dataset
+muestra$FamilyIDTKGrouped<-FamilyIDTKGrouped
+
+
+
+#Juntamos el familyid con el numero de tickets juntos
+familyticket<-as.data.frame(paste(FamilyID , TicketFreq))
+familyticket<-paste(FamilyID , TicketFreq)
+#mostramos frecuencia de los datos
+table(familyticket)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ as.factor(familyticket), FUN=function(x) {sum(x)/length(x)})
+#valdría para ver grupos heterogéneos de familia y amigos, pero no aporta nada, o eso creo.
+
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+```
+
+## Trabajo con Parch
+
+```{r pruebas_mrzs_Parch, size="small"}
+
+#TRABAJO CON Parch
+#vamos a ver si las madres tuvieron más provabilidades de sobrevivir que las no madres
+IsMother <- Titulo == "Mrs" & muestra$Parch > 0
+#mostramos frecuencia de los datos
+table(IsMother)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ IsMother, FUN=function(x) {sum(x)/length(x)})
+#añadimos al dataset
+muestra$IsMother<-IsMother
+
+
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+
+```
+
+
+## Trabajo con Embarqued
+
+```{r pruebas_mrzs_Embarked, size="small"}
+#TRABAJO CON Embarqued
+
+#mostramos frecuencia de los datos
+table(muestra$Embarked)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ muestra$Embarked, FUN=function(x) {sum(x)/length(x)})
+# existen 2 elementos sin embarked o con el en blanco
+#Limpieza
+muestra[muestra$Embarked=='',]
+#No encuentro nada que me pueda indicar el puerto de embarque así que ponemos S que es la más frecuente
+muestra[muestra$Embarked=='',]$Embarked<-'S'
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+```
+## Trabajo con Cabina
+
+```{r pruebas_mrzs_Cabina, size="small"}
+
+#TRABAJO CON CABINA
+#No merece la pena hay muchos perdidos
+
+#Limpieza
+muestra[muestra$Cabin=='',]
+#hay demasiados valores perdidos, no merece la pena 
+
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+```
+
+## Trabajo con Fare
+
+```{r pruebas_mrzs_Fare, size="small"}
+#TRABAJO CON Fare
+#usamos la función cut para separar en grupos o categorías
+FareGroups<-cut(muestra$Fare, 16, include.lowest=TRUE)
+#mostramos frecuencia de los datos
+table(FareGroups)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FareGroups, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos y el sexo
+aggregate(muestra$Survived ~ FareGroups+muestra$Sex, FUN=function(x) {sum(x)/length(x)})
+table(FareGroups[muestra$Sex=='female'])
+table(FareGroups[muestra$Sex=='male'])
+#añadimos al dataset
+muestra$FareGroups<-FareGroups
+
+#podemos obtener un fare por persona dividiendo el coste entre el número de tickets iguales
+FareIndividual<-muestra$Fare/muestra$TicketFreq
+muestra$FareIndividual<-FareIndividual
+#creamos grupos para faresindividuales
+FareIndGroups<-cut(muestra$FareIndividual, 16, include.lowest=TRUE)
+#mostramos frecuencia de los datos
+table(FareIndGroups)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FareIndGroups, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos y el sexo
+aggregate(muestra$Survived ~ FareIndGroups+muestra$Sex, FUN=function(x) {sum(x)/length(x)})
+table(FareIndGroups[muestra$Sex=='female'])
+table(FareIndGroups[muestra$Sex=='male'])
+#añadimos al dataset
+muestra$FareIndGroups<-FareIndGroups
+
+
+#Limpieza
+#Valores perdidos
+muestra[is.na(muestra$Fare),]
+#rellenamos el valor perdido con el fare medio para su clase,su sexo y su numero de hijos, omitimos Nas.
+muestra$Fare[is.na(muestra$Fare)] <- median(na.omit(muestra$Fare[muestra$Pclass==3 & muestra$Sex=="male" & muestra$Parch==0]))
+
+#valores a 0
+muestra[muestra$Fare==0,]
+boxplot(muestra$Fare,
+        data = muestra,
+        ylab = "Fare del pasajero",
+        main = "grafico de caja de Fare") 
+boxplot.stats(muestra$Fare)$out 
+#Parece que la variable está bastante afectada por los valores extremos, hay algun fare muy elevado.
+boxplot(muestra[muestra$Fare!=0,]$Fare,
+        data = muestra,
+        ylab = "Fare del pasajero",
+        main = "grafico de caja de Fare") 
+boxplot.stats(muestra$Fare)$out 
+#quitando los valores a 0 vemos que no varía nada los extremos superiores.
+# tendríamos que ver que hacer con los outliers superiores
+# podemos comprobar la Fare más alta de Test y el resto igual podemos no usarlo o agruparlo, dependiendo del porcentaje de supervivencia
+
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+```
+## Trabajo con Edad
+
+```{r pruebas_mrzs_Edad, size="small"}
+#TRABAJO CON EDAD
+hist(muestra$Age, ylab="frecuencia absoluta", xlab="Age", breaks= 6, col="darkgray")
+#usamos la función cut para separar en grupos o categorías
+ageGroups<-cut(muestra$Age, 5, include.lowest=TRUE)
+#mostramos frecuencia de los datos
+table(ageGroups)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ ageGroups, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos y el sexo
+aggregate(muestra$Survived ~ ageGroups+muestra$Sex, FUN=function(x) {sum(x)/length(x)})
+#añadimos al dataset
+muestra$ageGroupsByCut<-ageGroups
+
+# LIMPIEZA 
+
+#Imputamos los valores perdidos por la media de edad de cada titulo
+muestra[is.na(muestra$Age),]
+#obtenemos las edades medias de los grupos  
+aggregate(muestra$Age ~ ageGroups, FUN=function(x) {sum(x)/length(x)})
+#obtenemos las edades medias de los Titulos  
+mediasTitulos<-aggregate(muestra$Age ~ Titulo, FUN=function(x) {sum(x)/length(x)})
+#vemos cuantos valores perdidos hay dentro de cada Titulo
+table(Titulo[is.na(muestra$Age)])
+#asignamos la media del título a cada elemento
+TitleAges <- mediasTitulos$`muestra$Age`[match(unlist(Titulo), mediasTitulos$Titulo)]
+#Creamos una nueva variable en el dataset con todos los valores de Age + imputaciones
+muestra$Ages <- ifelse(is.na(muestra$Age), TitleAges, muestra$Age)
+#sustituimos en la columna buena
+#VAMOS A PROBAR INICIALMENTE CON ESTE MÉTODO, PARECE MÁS FIABLE DE ENTRADA
+#El resto de los metodos de imputación parecen algo pobres habría que pulirlos un poco
+muestra$Age <- ifelse(is.na(muestra$Age), TitleAges, muestra$Age)
+
+#imputamos valores perdidos por KNN
+# para imputar los valores perdidos Age vamos a usar las variables "Pclass","Sex","SibSp","Parch","Fare","Embarked","Titulo"
+# pero hay que refactorizar los factores para pasarlo a numérico???
+# parece que funciona pero habría que asegurarse de si los factores valen sin refactorizar
+dfinputaciones<-kNN(muestra, variable=c("Age"), dist_var=c("Pclass","Sex","SibSp","Parch","Fare","Embarked","Titulo",'FamSize'),k=3)
+#extraemos las inputaciones de  Age
+dfinputAge<-dfinputaciones[dfinputaciones$Age_imp=="TRUE",]
+# Almacenamos los valores predichos de Age en la muestra
+muestra$KNNAges<- 0
+muestra$KNNAges[dfinputAge$PassengerId]<-dfinputAge$Age
+#comparamos predicciones, la de la media con la de KNN
+tblAges<-cbind(muestra[is.na(muestra$Age),]$PassengerId,muestra[is.na(muestra$Age),]$Age,muestra[is.na(muestra$Age),]$Ages,muestra[is.na(muestra$Age),]$KNNAges, diferencia = muestra[is.na(muestra$Age),]$Ages - muestra[is.na(muestra$Age),]$KNNAges)
+#comparamos valores obtenidos por KNN con los valores obtenidos por titulo
+tblAges[order(abs(tblAges[,'diferencia']),decreasing=TRUE),]
+#algunos valores se diferencian bastante
+
+
+# Imputamos los valores perdidos con rpart
+# no tengo muy controlados los arboles de decisión, habría que ver si esta bien creado o hay que optimizar
+summary(muestra$Age)
+#creamos el modelo para prediccion
+Agefit <- rpart(Age ~ Pclass + Sex + SibSp + Parch + Fare + Embarked + Titulo + FamSize, data=muestra[!is.na(muestra$Age),],method="anova")
+#predecimos los valores perdidos
+RpartPredictedAges <- predict(Agefit, muestra[is.na(muestra$Age),])
+# rellenamos la variable con los valores imputados, descomentar si se quieren usar estos valores para imputar
+#muestra$Age[is.na(muestra$Age)] <- predict(Agefit, muestra[is.na(muestra$Age),])
+tblAges<-cbind(muestra[is.na(muestra$Age),]$PassengerId,muestra[is.na(muestra$Age),]$Age,muestra[is.na(muestra$Age),]$Ages,muestra[is.na(muestra$Age),]$KNNAges,RpartPredictedAges, diferencia = muestra[is.na(muestra$Age),]$Ages - RpartPredictedAges, diferencia2 = muestra[is.na(muestra$Age),]$KNNAges - RpartPredictedAges)
+#comparamos valores obtenidos por rpart con los valores obtenidos por titulo
+tblAges[order(abs(tblAges[,'diferencia']),decreasing=TRUE),]
+#observamos que en algunos valores hay bastante diferencia, hay una miss 129 con asignación de 7 años y varios master con asignaciones superiores a 16, lo que puede variar considerablemente las probabilidades de supervivencia
+
+
+#por regresion
+concat <- na.omit(muestra)
+#mostramos histograma de la edad
+ggplot(concat, aes(x=Age)) + 
+  geom_histogram(binwidth=2,color="black", fill="white") +
+  theme_bw() +
+  ggtitle("Age histogram across passengers") +
+  xlab("Age") + ylab("Observed Counts") + theme(plot.title = element_text(hjust = 0.5))
+
+#habría que ver la distribución de las variables y ver si son normales, si hay homocedasticidad, independencia??
+par(mfrow=c(1,1))
+x1 <- muestra$Pclass
+x2 <- muestra$SibSp
+x3 <- muestra$Parch
+x4 <- muestra$Fare
+x5 <- muestra$Sex
+x6 <- muestra$Embarked
+x7 <- as.factor(muestra$IsMother)
+x8 <-  as.factor(muestra$LoneWolfs)
+x9 <- muestra$FamSize
+x10 <- muestra$Titulo
+#ajustamos los valores de referencia en los factores
+x5 <- relevel(x5, ref = 'male')
+x6 <- relevel(x6, ref = 'S')
+x7 <- relevel(x7, ref = 'FALSE')
+x8 <- relevel(x8, ref = 'TRUE')
+x10 <- relevel(x10, ref = 'Mr')
+y <- muestra$Age
+#vemos correlación de variables cuantitativas
+scatterplotMatrix(muestra[,c("Pclass","SibSp","Parch","Fare","FamSize")], diagonal=list(method ="histogram", breaks="FD"), smooth=FALSE)
+#vemos correlación de cualitativas
+ggplot(data = muestra, mapping=aes(x = x5, y = Age, color=x5)) +
+geom_boxplot() +
+geom_jitter(width = 0.1) +
+theme_bw() + theme(legend.position = "none")+
+labs( title ="Relación de Sex y Age")  
+ggplot(data = muestra, mapping=aes(x = x6, y = Age, color=x6)) +
+geom_boxplot() +
+geom_jitter(width = 0.1) +
+theme_bw() + theme(legend.position = "none")+
+labs( title ="Relación de Embarked y Age")  
+ggplot(data = muestra, mapping=aes(x = x7, y = Age, color=x7)) +
+geom_boxplot() +
+geom_jitter(width = 0.1) +
+theme_bw() + theme(legend.position = "none")+
+labs( title ="Relación de IsMother y Age") 
+ggplot(data = muestra, mapping=aes(x = x8, y = Age, color=x8)) +
+geom_boxplot() +
+geom_jitter(width = 0.1) +
+theme_bw() + theme(legend.position = "none")+
+labs( title ="Relación de LoneWolf y Age") 
+ggplot(data = muestra, mapping=aes(x = x10, y = Age, color=x10)) +
+geom_boxplot() +
+geom_jitter(width = 0.1) +
+theme_bw() + theme(legend.position = "none")+
+labs( title ="Relación de Titulo y Age") 
+
+#estimacion del modelo1
+#modelo_lineal_multiple <- lm(y ~ x1+x2+x3+x4+x5+x6+x7+x8+x9+x10)
+#quitamos famsize porque anula el vif al ser relacion de otras variables
+modelo_lineal_multiple <- lm(y ~ x1+x2+x3+x4+x5+x6+x7+x8+x10)
+
+print("Los coeficientes estimados son:")
+modelo_lineal_multiple$coefficients
+print("----------------------------------------------------------------------------------")
+print("Resumen completo de los modelos")
+summary(modelo_lineal_multiple)
+summary.aov(modelo_lineal_multiple)
+##Vamos a probar la significación de las variables por intervalos de confianza
+print("Intervalos de confianza para la significación del modelo")
+confint(modelo_lineal_multiple, level=0.999)
+#esto muestra las gráficas de los residuos del modelo
+par(mfrow=c(2,2))
+plot(modelo_lineal_multiple)
+par(mfrow=c(1,1))
+plot( predict (modelo_lineal_multiple ), rstudent (modelo_lineal_multiple ))
+print("Variance inflation factors")
+vif(modelo_lineal_multiple)
+
+#Obtenemos un modelo2 de regresión múltiple !Este usa el logaritmo de la edad y mejora un poco pero solo llegamos al coeficiente de determinación 0.55!
+#habría que eliminar variables que no aportan y puede que estandarizar y normalizar variables
+#Se pueden ir probando los resultados con la predicción y viendo si mejora la predicción de supervivientes
+#fit <- lm(log(Age)~Pclass+SibSp+Parch+Fare+Sex+Embarked+isMother+allSurv+anySurv+noneSurv+loneP+            Deck+FamSize+FamSize2+Title+FarePP+TicketFreq+ticCode+ticLett,data = concat)
+#fit <- lm(log(Age)~Pclass+SibSp+Parch+Fare+Sex+Embarked+IsMother+LoneWolfs+FamSize+Titulo,data = concat)
+#quitamos famsize porque anula el vif al ser relacion de otras variables
+fit <- lm(log(Age)~Pclass+SibSp+Parch+Fare+Sex+Embarked+IsMother+LoneWolfs+Titulo,data = concat)
+print("Los coeficientes estimados son:")
+fit$coefficients
+print("----------------------------------------------------------------------------------")
+print("Resumen completo de los modelos")
+summary(fit)
+summary.aov(fit)
+##Vamos a probar la significación de las variables por intervalos de confianza
+print("Intervalos de confianza para la significación del modelo")
+confint(fit, level=0.999)
+#esto muestra las gráficas de los residuos del modelo
+par(mfrow=c(2,2))
+plot(fit)
+par(mfrow=c(1,1))
+plot( predict (fit ), rstudent (fit ))
+print("Variance inflation factors")
+vif(fit)
+
+#Nos quedamos con el segundo modelo que es mejor, pero hay que mejorar estos modelos
+#porque como están son bastante malos, coeficientes de determinación que no llegan al 60%
+
+library(MASS, lib.loc = "/usr/lib/R/library") #hace falta para SepAIC
+# no tengo muy claro que hace esto, parece que debería ser para escoger entre varios modelos por AIC, pero no lo se
+step.model <- stepAIC(fit, direction = "both",trace = F) 
+dummyIndex <- which(is.na(muestra$Age))
+muestra$RegresionAges<- 0
+#obtenemos las predicciones de la Edad
+muestra$RegresionAges[dummyIndex] <- exp(predict(step.model, newdata = muestra[dummyIndex,]))
+tblAges<-cbind(muestra[is.na(muestra$Age),]$PassengerId,muestra[is.na(muestra$Age),]$Age,muestra[is.na(muestra$Age),]$Ages,RpartPredictedAges,muestra[is.na(muestra$Age),]$RegresionAges, diferencia1  = muestra[is.na(muestra$Age),]$Ages - RpartPredictedAges, diferencia2  = muestra[is.na(muestra$Age),]$RegresionAges - RpartPredictedAges, diferencia3  = muestra[is.na(muestra$Age),]$RegresionAges - muestra[is.na(muestra$Age),]$Ages)
+#comparamos valores obtenidos por regresion con los valores obtenidos por titulo
+tblAges[order(abs(tblAges[,'diferencia2']),decreasing=TRUE),]
+#comparamos valores obtenidos por regresion con los valores obtenidos por rpart
+tblAges[order(abs(tblAges[,'diferencia3']),decreasing=TRUE),]
+#-----------------------------------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+```
+
+## Análisis de las variables
+
+```{r pruebas_analisis, size="small"}
+#resumen estadístico de las variables del dataset sería un análisis estadístico
+summary(muestra)
+
+#"Pclass","Sex","SibSp","Parch","Fare","Embarked","Titulo",'FamSize','FamilyIDTKGrouped','IsMother','LoneWolfs','Age','TktNum'
+#Mostramos matriz de correlaciones entre las variables numéricas
+auxmat <- cov2cor(cov.wt(cbind(muestra$Pclass,muestra$Age,muestra$SibSp,muestra$Parch,muestra$Fare,muestra$TicketFreq,muestra$FamSize,muestra$FareIndividual))$cov)
+colnames(auxmat)<-c("Pclass","SibSp","Parch","Fare",'FamSize','Age','TicketFreq','FareIndividual') 
+rownames(auxmat)<-c("Pclass","SibSp","Parch","Fare",'FamSize','Age','TicketFreq','FareIndividual') 
+auxmat
+
+#Gráfico de correlación entre variables
+tabla_contingencia <- xtabs(~Survived+Pclass, data=muestra)
+# se comprueba por chisq.test()
+chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
+corrplot(chisqresult$residuals, is.cor = FALSE)
+
+
+#Para realizar el análisis de componentes no tiene que haber Nas
+#Preparamos un dataset sin Nas
+noNaGroup<-muestra[,c(3,5,6,7,8,9,10,12,13,15,16,17,18,19,20,21,22,23,24,25)]
+noNaGroup <- noNaGroup %>% mutate_if(is.logical, as.factor)
+#undertake a factor analysis of mixed data (note that quantitative variables are automatically scaled to unit variance here). 
+res.famd <- FAMD(noNaGroup, ncp = 40,graph = F)
+print(res.famd$eig[,-1])
+#obtenemos unos valores muy raros, creo que no deberían tener correlacion
+
+#scree plot and an overview of variable contributions to the first two dimensions.
+# {r, echo=FALSE, fig.width=4.5, fig.height=4}
+fviz_screeplot(res.famd, addlabels = TRUE)
+fviz_famd_var(res.famd, col.var = "contrib", axes = c(1,2), ylim=c(-0.1,0.8), xlim=c(-0.1,0.95),repel = T,
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07") )
+
+
+### New train and test data sets
+#We thus create new train and test data sets, using the full projected data. We still retain the original data sets however, as these are more appropriate for models that deal with correlated variables on their on (i.e. Random Forests,...).
+trainFAMD <- data.frame(train[,1:2],res.famd$ind$coord[1:nrow(train),1:25])
+testFAMD <- data.frame(test[,1],res.famd$ind$coord[(nrow(train)+1):nrow(concat),1:25])
+colnames(testFAMD)[1] <- colnames(trainFAMD)[1]
+
+#Let us have a look at the (**train**) data projection across the principal dimensions, colour coded for survival.
+
+ggplot(trainFAMD, aes(color=Survived, y=Dim.2, x=Dim.1)) +
+  geom_point() + theme_bw() +  ggtitle("Passenger coordinates") +
+  xlab("Dimension 1") + ylab("Dimension 2") + theme(plot.title = element_text(hjust = 0.5))
+  
+ggplot(trainFAMD, aes(color=Survived, y=Dim.4, x=Dim.3)) +
+  geom_point() + theme_bw() +  ggtitle("Passenger coordinates") +
+  xlab("Dimension 3") + ylab("Dimension 4") + theme(plot.title = element_text(hjust = 0.5))
+   
+ggplot(trainFAMD, aes(color=Survived, y=Dim.6, x=Dim.5)) +
+  geom_point() + theme_bw() +  ggtitle("Passenger coordinates") +
+  xlab("Dimension 5") + ylab("Dimension 6") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(trainFAMD, aes(color=Survived, y=Dim.8, x=Dim.7)) +
+  geom_point() + theme_bw() +  ggtitle("Passenger coordinates") +
+  xlab("Dimension 7") + ylab("Dimension 8") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(trainFAMD, aes(color=Survived, y=Dim.10, x=Dim.9)) +
+  geom_point() + theme_bw() +  ggtitle("Passenger coordinates") +
+  xlab("Dimension 9") + ylab("Dimension 10") + theme(plot.title = element_text(hjust = 0.5))
+
+ggplot(trainFAMD, aes(color=Survived, y=Dim.12, x=Dim.11)) +
+  geom_point() + theme_bw() +  ggtitle("Passenger coordinates") +
+  xlab("Dimension 11") + ylab("Dimension 12") + theme(plot.title = element_text(hjust = 0.5))
+ 
+
+```
+
+## Prediccion por Random Forest
+
+```{r pruebas_predict_rf, size="small"}
+# Partimos el dataset en los conjuntos iniciales de train y test.
+train2 <- muestra[1:891,]
+test2 <- muestra[892:1309,]
+
+#creamos un conjunto de entrenamiento y test propios a partir de train para calcular nuestros porcentaje de acierto
+## 85% of the sample size
+smp_size <- floor(0.85 * nrow(train2))
+## Establecemos una semilla para poder volver a reproducir el mismo muestreo
+set.seed(123)
+train_ind <- sample(seq_len(nrow(train2)), size = smp_size)
+train3 <- train2[train_ind, ]
+test3 <- train2[-train_ind, ]
+test3Survival<-test3$Survived
+test3$Survived <- NA
+
+#modelo para predicción por random forest
+set.seed(400)
+fit <- randomForest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Titulo + FamSize,
+                      data=train3, 
+                      importance=TRUE, 
+                      ntree=2000)
+
+# Vemos la importancia de las variables
+varImpPlot(fit)
+# hacemos la predicción y la guardamos en formato de envio 
+Prediction <- predict(fit, test3)
+submittest3 <- data.frame(PassengerId = test3$PassengerId, Survived = Prediction)
+#pasamos dataset a fichero
+#write.csv(submit, file = "firstforest.csv", row.names = FALSE)
+
+#Vamos a comparar el resultado con las observaciones de la variable y construir una matriz de acierto
+t_cont_prediccion_contra_observación<- xtabs(~test3Survival+submittest3$Survived)
+print("Tabla de contingencia de predicciones survived contra observaciones survived")
+t_cont_prediccion_contra_observación
+sumatorios_filas <- rowSums(t_cont_prediccion_contra_observación)
+sumatorios_columnas <- colSums(t_cont_prediccion_contra_observación)
+total_elementos <- sum(t_cont_prediccion_contra_observación)
+# obtenemos los porcentages de aciertos de 1s(Sensitivity) y 0s(specificity)
+porcentaje_de_acierto <- t_cont_prediccion_contra_observación[,1]/sumatorios_filas
+porcentaje_de_acierto[2]<-1-porcentaje_de_acierto[2] 
+porcentaje_de_acierto
+print("Matriz de porcentage de aciertos del modelo")
+matriz_aciertos<-cbind(t_cont_prediccion_contra_observación,porcentaje_de_acierto)
+print("acierto general del modelo")
+acierto_tortal <-  (t_cont_prediccion_contra_observación[1,1]+t_cont_prediccion_contra_observación[2,2])/total_elementos
+acierto_tortal
+kable(matriz_aciertos, caption = paste("Matriz de acierto del modelo. acierto global:",acierto_tortal))%>%
+kable_styling(latex_options = c("striped", "hold_position"), position = "center", font_size = 8)%>%
+add_header_above(c(" ", "(Prediccion survival)" = 2," "), bold = T, italic = T)%>%
+pack_rows("(Observacioens survival)", 1, 2)
+
+
+
+# Predicciones por condition inference tree Random Forest
+## set the seed to make your partition reproducible
+set.seed(123)
+#creamos un conjunto de entrenamiento y test propios a partir de train
+train3<-train2
+#convertimos a factor la agrupacion por familias para poder usarlo en el cforest
+train3$FamilyIDTKGrouped<-as.factor(train3$FamilyIDTKGrouped)
+#creamos un conjunto de entrenamiento y test propios a partir de train para calcular nuestros porcentaje de acierto
+## 85% of the sample size
+smp_size <- floor(0.85 * nrow(train3))
+train_ind <- sample(seq_len(nrow(train3)), size = smp_size)
+train4 <- train3[train_ind, ]
+test4 <- train3[-train_ind, ]
+test4Survival<-test4$Survived
+test4$Survived <- NA
+
+set.seed(400)
+fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Titulo + FamSize +FamilyIDTKGrouped,
+               data = train4, controls=cforest_unbiased(ntree=2000, mtry=3)) 
+# hacemos la predicción y la guardamos en formato de envio 
+Prediction <- predict(object = fit, newdata=test4, OOB=TRUE, type = "response")
+submittest3cf <- data.frame(PassengerId = test3$PassengerId, Survived = Prediction)
+#escribimos fichero
+#write.csv(submit, file = "ciforest.csv", row.names = FALSE)
+#Vamos a comparar el resultado con las observaciones de la variable y construir una matriz de acierto
+t_cont_prediccion_contra_observación<- xtabs(~test4Survival+submittest3cf$Survived)
+print("Tabla de contingencia de predicciones survival contra observaciones survival")
+t_cont_prediccion_contra_observación
+sumatorios_filas <- rowSums(t_cont_prediccion_contra_observación)
+sumatorios_columnas <- colSums(t_cont_prediccion_contra_observación)
+total_elementos <- sum(t_cont_prediccion_contra_observación)
+# obtenemos los porcentages de aciertos de 1s(Sensitivity) y 0s(specificity)
+porcentaje_de_acierto <- t_cont_prediccion_contra_observación[,1]/sumatorios_filas
+porcentaje_de_acierto[2]<-1-porcentaje_de_acierto[2] 
+porcentaje_de_acierto
+print("Matriz de porcentage de aciertos del modelo")
+matriz_aciertos<-cbind(t_cont_prediccion_contra_observación,porcentaje_de_acierto)
+print("acierto general del modelo")
+acierto_tortal <-  (t_cont_prediccion_contra_observación[1,1]+t_cont_prediccion_contra_observación[2,2])/total_elementos
+acierto_tortal
+kable(matriz_aciertos, caption = paste("Matriz de acierto del modelo. acierto global:",acierto_tortal))%>%
+kable_styling(latex_options = c("striped", "hold_position"), position = "center", font_size = 8)%>%
+add_header_above(c(" ", "(Prediccion survival)" = 2," "), bold = T, italic = T)%>%
+pack_rows("(Observacioens survival)", 1, 2)
+
+
+```
+## Predicción por KNN
+
+```{r pruebas_predict_knn, size="small"}
+
+# Predicciones por KNN
+## set the seed to make your partition reproducible
+set.seed(123)
+#creamos un conjunto de entrenamiento y test propios a partir de train
+train3<-train2
+#convertimos a factor las variables lógicas
+train3 <- train3 %>% mutate_if(is.logical, as.factor)
+#creamos un conjunto de entrenamiento y test propios a partir de train para calcular nuestros porcentaje de acierto
+## 85% of the sample size
+smp_size <- floor(0.85 * nrow(train3))
+train_ind <- sample(seq_len(nrow(train3)), size = smp_size)
+train4 <- train3[train_ind, ]
+test4 <- train3[-train_ind, ]
+#quitamos los valores observados para comparar efectividad
+test4Survival<-test4$Survived
+#Ponemos Nas en survived de nuestro test  
+test4$Survived <- NA
+#Volvemos a concatenar para usar KNN
+train3<-rbind(train4,test4)
+
+#imputamos valores perdidos por KNN
+# para imputar los valores de survived vamos a usar las variables 
+#"Pclass","Sex","SibSp","Parch","Fare","Embarked","Titulo",'FamilyIDTKGrouped','IsMother','LoneWolfs',"Age",'TktNum'
+# pero hay que refactorizar los factores para pasarlo a numérico???
+# parece que funciona pero habría que asegurarse de si los factores valen sin refactorizar
+dfinputaciones<-kNN(train3, variable=c("Survived"), dist_var=c("Pclass","Sex","SibSp","Parch","Fare","Embarked","Titulo",'FamSize','FamilyIDTKGrouped','IsMother','LoneWolfs','Age','TktNum'),k=4)
+#extraemos las inputaciones de  Survived
+dfinputSurvived<-dfinputaciones[dfinputaciones$Survived_imp=="TRUE",]
+# Almacenamos los valores predichos de Survived para enviar
+KNNsurvived<-dfinputSurvived$Survived
+submittest3cf <- data.frame(PassengerId = test4$PassengerId, Survived = KNNsurvived)
+#escribimos fichero
+#write.csv(submit, file = "knn.csv", row.names = FALSE)
+#Vamos a comparar el resultado con las observaciones de la variable y construir una matriz de acierto
+t_cont_prediccion_contra_observación<- xtabs(~test4Survival+submittest3cf$Survived)
+print("Tabla de contingencia de predicciones survival contra observaciones survival")
+t_cont_prediccion_contra_observación
+sumatorios_filas <- rowSums(t_cont_prediccion_contra_observación)
+sumatorios_columnas <- colSums(t_cont_prediccion_contra_observación)
+total_elementos <- sum(t_cont_prediccion_contra_observación)
+# obtenemos los porcentages de aciertos de 1s(Sensitivity) y 0s(specificity)
+porcentaje_de_acierto <- t_cont_prediccion_contra_observación[,1]/sumatorios_filas
+porcentaje_de_acierto[2]<-1-porcentaje_de_acierto[2] 
+porcentaje_de_acierto
+print("Matriz de porcentage de aciertos del modelo")
+matriz_aciertos<-cbind(t_cont_prediccion_contra_observación,porcentaje_de_acierto)
+print("acierto general del modelo")
+acierto_tortal <-  (t_cont_prediccion_contra_observación[1,1]+t_cont_prediccion_contra_observación[2,2])/total_elementos
+acierto_tortal
+kable(matriz_aciertos, caption = paste("Matriz de acierto del modelo. acierto global:",acierto_tortal))%>%
+kable_styling(latex_options = c("striped", "hold_position"), position = "center", font_size = 8)%>%
+add_header_above(c(" ", "(Prediccion survival)" = 2," "), bold = T, italic = T)%>%
+pack_rows("(Observacioens survival)", 1, 2)
+
+
+```
+## Predicción por regresión logística
+
+```{r pruebas_predict_rl, size="small"}
+#Vamos a analizar la relación entre las variables
+
+#Gráfico de correlación entre variables
+muestra2 <- cbind.data.frame(muestra,peso_etiquetado)
+tabla_contingencia <- xtabs(~peso_etiquetado+Sm, data=muestra2)
+chisqresult <-Chi_square_test_for_independence(tabla_contingencia, 0.05)
+corrplot(chisqresult$residuals, is.cor = FALSE)
+# se comprueba por chisq.test()
+chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
+corrplot(chisqresult$residuals, is.cor = FALSE)
+
+
+#estudio madre fumadora
+t_cont_peso_fumadora<- xtabs(~peso_etiquetado+Sm, data=muestra)
+print("Tabla de contingencia de peso contra madre fumadora")
+t_cont_peso_fumadora
+#test de independencia
+chisq.test(t_cont_peso_fumadora)
+#Cálculo de odds ratio
+my_odds_ratio_peso_fumadora <- with(muestra, (t_cont_peso_fumadora[1,1]*t_cont_peso_fumadora[2,2])/(t_cont_peso_fumadora[1,2]*t_cont_peso_fumadora[2,1]))
+print("Odds ratio de peso contra madre fumadora")
+my_odds_ratio_peso_fumadora
+
+#estudio sexo
+t_cont_peso_sexo<- xtabs(~peso_etiquetado+Sex, data=muestra)
+print("Tabla de contingencia de peso contra sexo")
+t_cont_peso_sexo
+#test de independencia
+chisq.test(t_cont_peso_sexo)
+#Cálculo de odds ratio no hace falta, son independientes
+#my_odds_ratio_peso_sexo <- with(muestra, (t_cont_peso_sexo[1,1]*t_cont_peso_sexo[2,2])/(t_cont_peso_sexo[1,2]*t_cont_peso_sexo[2,1]))
+
+#estudio semanas de gestacion
+t_cont_peso_Ge<- xtabs(~peso_etiquetado+Ge_etiquetado, data=muestra)
+print("Tabla de contingencia de peso contra semanas de gestación dicotomizado")
+t_cont_peso_Ge
+#test de independencia
+chisq.test(t_cont_peso_Ge)
+#Cálculo de odds ratio 
+my_odds_ratio_peso_Ge <- with(muestra, (t_cont_peso_Ge[1,1]*t_cont_peso_Ge[2,2])/(t_cont_peso_Ge[1,2]*t_cont_peso_Ge[2,1]))
+print("Odds ratio de peso contra semanas de gestación dicotomizado")
+my_odds_ratio_peso_Ge
+
+
+```
+```{r regresion_logistica_peso_fumadora_AD_City, size="small"}
+x1 <- muestra$Sm
+x2 <- muestra$AD
+x3 <- relevel(muestra$City, ref = 'Barcelona')
+y <- muestra$peso_etiquetado
+t_cont_peso_fumadora<- xtabs(~peso_etiquetado+Sm, data=muestra)
+print("Tabla de contingencia de peso contra madre fumadora")
+t_cont_peso_fumadora
+# se puede hacer un tabla de contingencias con la continua AD?? Parece que si!!
+t_cont_peso_AD<- xtabs(~peso_etiquetado+AD, data=muestra)
+print("Tabla de contingencia de peso contra diámetro abdominal")
+t_cont_peso_AD
+t_cont_peso_City<- xtabs(~peso_etiquetado+City, data=muestra)
+print("Tabla de contingencia de peso contra Ciudad de nacimiento referencia Barcelona")
+t_cont_peso_City
+
+mymod3 <- glm(y ~ x1+x2+x3, binomial)
+summary(mymod3)
+#table(y) 
+#confint(mymod3) # 95% CI for the coefficients
+#exp(coef(mymod3)) # exponentiated coefficients (odds?? Sí, OddsRatio) 
+#exp(confint(mymod3)) # 95% CI for exponentiated coefficients (Intervalo de confianza de las OR)
+#residuals(mymod3, type="deviance") # residuals
+
+## vamos a ver los resultados del modelo para ver que tal lo hace
+probabilidades <- predict(mymod3, type="response") # predicted values
+# si la predicción supera el 50% se asigna a peso bajo
+predicciones <- ifelse(probabilidades > 0.5, "Peso Bajo", "No peso bajo")
+#t_cont_prediccion_peso_fumadora_ad<- xtabs(~as.factor(predicciones)+Sm+AD, data=muestra)
+#print("Tabla de contingencia de predicciones peso contra madre fumadora y diámetro abdominal")
+# Crea muchas tablas de contingencia por valores de AD
+#t_cont_prediccion_peso_fumadora_ad
+print("Tabla de contingencia de peso contra diámetro abdominal")
+t_cont_peso_AD
+t_cont_prediccion_peso_fumadora_ad<- xtabs(~as.factor(predicciones)+AD, data=muestra)
+print("Tabla de contingencia de predicciones peso contra diámetro abdominal")
+t_cont_prediccion_peso_fumadora_ad
+print("Tabla de contingencia de peso contra City")
+t_cont_peso_City
+t_cont_prediccion_peso_fumadora_city<- xtabs(~as.factor(predicciones)+City, data=muestra)
+print("Tabla de contingencia de predicciones peso contra city")
+t_cont_prediccion_peso_fumadora_city
+
+#Así no podemos calcular los odds ratio
+#my_odds_ratio_prediccion_peso_fumadora_ad <- with(muestra, (t_cont_prediccion_peso_fumadora_ad[1,1]*t_cont_prediccion_peso_fumadora_ad[2,2])/(t_cont_prediccion_peso_fumadora_ad[1,2]*t_cont_prediccion_peso_fumadora_ad[2,1]))
+#print("Odds ratio de predicciones peso contra madre fumadora y diámetro abdominal")
+#my_odds_ratio_prediccion_peso_fumadora_ad
+
+#Decide on optimal prediction probability cutoff for the model
+#The default cutoff prediction probability score is 0.5 or the ratio of 1’s and 0’s in the training data. But sometimes, tuning the probability cutoff can improve the accuracy in both the development and validation samples. The InformationValue::optimalCutoff function provides ways to find the optimal cutoff to improve the prediction of 1’s, 0’s, both 1’s and 0’s and o reduce the misclassification error. Lets compute the optimal score that minimizes the misclassification error for the above model.
+#library(InformationValue)
+optCutOff <- optimalCutoff(mymod3$y, fitted(mymod3))[1] 
+print("Porcentaje de corte óptimo")
+optCutOff
+
+#Misclassification Error
+#Misclassification error is the percentage mismatch of predcited vs actuals, irrespective of 1’s or 0’s. The lower the misclassification error, the better is your model.
+print(paste("Error por fallo de mala clasificación corte=",optCutOff))
+misClassError(mymod3$y, fitted(mymod3), threshold = optCutOff)
+print("Error por fallo de mala clasificación corte 0.5")
+misClassError(mymod3$y, fitted(mymod3), threshold = 0.5)
+
+#Vamos a comparar el resultado con las observaciones de la variable y construir una matriz de acierto
+t_cont_prediccion_contra_observación<- xtabs(~peso_etiquetado+as.factor(predicciones), data=muestra)
+print("Tabla de contingencia de predicciones peso contra observaciones peso")
+t_cont_prediccion_contra_observación
+sumatorios_filas <- rowSums(t_cont_prediccion_contra_observación)
+sumatorios_columnas <- colSums(t_cont_prediccion_contra_observación)
+total_elementos <- sum(t_cont_prediccion_contra_observación)
+# obtenemos los porcentages de aciertos de 1s(Sensitivity) y 0s(specificity)
+porcentaje_de_acierto <- t_cont_prediccion_contra_observación[,1]/sumatorios_filas
+porcentaje_de_acierto[2]<-1-porcentaje_de_acierto[2] 
+porcentaje_de_acierto
+print("Matriz de porcentage de aciertos del modelo")
+matriz_aciertos<-cbind(t_cont_prediccion_contra_observación,porcentaje_de_acierto)
+print("acierto general del modelo")
+acierto_tortal <-  (t_cont_prediccion_contra_observación[1,1]+t_cont_prediccion_contra_observación[2,2])/total_elementos
+acierto_tortal
+kable(matriz_aciertos, caption = paste("Matriz de acierto del modelo. acierto global:",acierto_tortal))%>%
+kable_styling(latex_options = c("striped", "hold_position"), position = "center", font_size = 8)%>%
+add_header_above(c(" ", "(Prediccion peso)" = 2," "), bold = T, italic = T)%>%
+pack_rows("(Observacioens peso)", 1, 2)
+
+#vif para estudial problemas de multicolinearidad si el valor absoluto es > 4 puede haber problemas
+print("variance inflation factors")
+vif(mymod3)
+
+#vamos a probar el likelihood ratio (LR), or chi-square. como se interpreta??, es de independencia??
+loglikelihod<-logLik(mymod3)
+print("loglikelihod modelo")
+loglikelihod
+# este test de likelihod ratio 
+# LR = [-2 Log Likelihood (of beginning model)] - [-2 Log Likelihood (of ending model)]. 
+likelihoodRatio<-lrtest(mymod3)
+likelihoodRatio
+model_null = glm(y~1, binomial) #creamos una modelo solo con la constante para comparar el LR, parece que lo hace ya de serie si no se pasan 2 modelos
+likelihoodRatio<-lrtest(model_null,mymod3)
+print("loglikelihod Ratio test contra modelo con solo la constante")
+likelihoodRatio
+#Akaike Information Criterion (AIC) tiene relacion con log-likelihood1
+
+#McFadden's-R² es un "Pseudo R²" (sometimes called the likelihood ratio index [LRI]) McFadden =  1 - [-2LL(a,B)/-2LL(a)] 
+#funciona como R²: 0 no hay relacion y 1 ajuste perfecto
+mcfaddens<-1-logLik(mymod3)/logLik(model_null)
+print("MacFadden's Pseudo R²")
+mcfaddens
+
+#Wald test - Testing the hypothesis that a coefficient on an independent variable is significantly different from zero
+waldtest(model_null,mymod1, test = "Chisq")
+
+#Concordance
+#Ideally, the model-calculated-probability-scores of all actual Positive’s, (aka Ones) should be greater than the model-calculated-probability-scores of ALL the Negatives (aka Zeroes). Such a model is said to be perfectly concordant and a highly reliable one. This phenomenon can be measured by Concordance and Discordance.
+#In simpler words, of all combinations of 1-0 pairs (actuals), Concordance is the percentage of pairs, whose scores of actual positive’s are greater than the scores of actual negative’s. For a perfect model, this will be 100%. So, the higher the concordance, the better is the quality of model.
+concordance(muestra$peso_etiquetado ~ predicciones)
+
+#Specificity and Sensitivity (ya lo calculamos en el porcentage de acierto, para la matriz aciertos!!)
+#Sensitivity (or True Positive Rate) is the percentage of 1’s (actuals) correctly predicted by the model, while, specificity is the percentage of 0’s (actuals) correctly predicted. Specificity can also be calculated as 1-False Positive Rate.
+print('Valor de sensitivity con optimal cutoff')
+sensitivity(mymod3$y, fitted(mymod3), threshold = optCutOff)
+print('Valor de specificity con optimal cutoff')
+specificity(mymod3$y, fitted(mymod3), threshold = optCutOff)
+print('Valor de sensitivity con 0.5 cutoff')
+sensitivity(mymod3$y, fitted(mymod3), threshold = 0.5)
+print('Valor de specificity con 0.5 cutoff')
+specificity(mymod3$y, fitted(mymod3), threshold = 0.5)
+
+#matriz de confusión 
+#library(DAAG)
+confMatOrigData<-confusion(muestra$peso_etiquetado,predicciones)
+print('Matriz de confusion a partir de los datos originales')
+confMatOrigData
+print('Matriz de confusion a partir de los valores del modelo')
+confMat<-confusion(mymod3$y, fitted(mymod3))
+confMat
+
+
+## existen bias porque hay muchos mas pesos normales que pesos bajos en la muestra??? vamos a corregir esto
+## separamos los datos en conjunto de entrenamiento y test, pero obtenemos el mismo resultado
+# # Create Training Data
+# input_no_peso_bajo <- muestra[which(muestra$peso_etiquetado == 'No peso bajo'), ]  
+# input_peso_bajo <- muestra[which(muestra$peso_etiquetado == 'Peso bajo'), ] 
+# set.seed(100)  # for repeatability of samples
+# input_no_peso_bajo_training_rows <- sample(1:nrow(input_no_peso_bajo), 0.7*nrow(input_peso_bajo))  
+# input_peso_bajo_training_rows <- sample(1:nrow(input_peso_bajo), 0.7*nrow(input_peso_bajo)) 
+# training_ones <- input_no_peso_bajo[input_no_peso_bajo_training_rows, ]  
+# training_zeros <- input_peso_bajo[input_peso_bajo_training_rows, ]
+# trainingData <- rbind(training_ones, training_zeros)  # row bind the 1's and 0's 
+# # Create Test Data
+# test_ones <- input_no_peso_bajo[-input_no_peso_bajo_training_rows, ]
+# test_zeros <- input_peso_bajo[-input_peso_bajo_training_rows, ]
+# testData <- rbind(test_ones, test_zeros)  # row bind the 1's and 0's 
+# mymod2 <- glm(peso_etiquetado ~ Sm, binomial, data = trainingData)
+# summary(mymod2)
+# probabilidades <- predict(mymod2, type="response") # predicted values
+# predicciones <- ifelse(probabilidades > 0.5, "Peso Bajo", "No peso bajo")
+# t_cont_prediccion_peso_fumadora<- xtabs(~as.factor(predicciones)+Sm, data=trainingData)
+# my_odds_ratio_prediccion_peso_fumadora <- with(muestra, (t_cont_prediccion_peso_fumadora[1,1]*t_cont_prediccion_peso_fumadora[2,2])/(t_cont_prediccion_peso_fumadora[1,2]*t_cont_prediccion_peso_fumadora[2,1]))
+
+
+#library(rms)
+#mymod2 <- lrm(y ~ x1 + ... + xk, data=ds)
+#anova(mymod2, mymod1, test="Chisq")
+
+#Calculo de la OR con la variable continua en el modelo a partir de los coeficientes
+print('Odds ratio calculadas a partir de los coeficientes')
+exp(coef(mymod3))
+#Calculo de los intervalos de ocnfianza con la variable continua en el modelo a partir de los coeficientes
+print('Intervalos de confianza a partir de los coeficientes')
+exp(confint(mymod3))
+#comprobamos con funcion 
+library(questionr)
+print('Odds ratio calculadas a partir de una funcion para comprobación')
+odds.ratio(mymod3)
+
+print('contraste de todos los modelos con anova')
+anova(mymod1, mymod2, mymod3, test="Chisq")
+
+```
+
+##2.3. Predicción
+Según el modelo del apartado 2.2 b), ¿cuál sería la probabilidad de bajo peso al nacer, si la madre es fumadora y AD es de 90?
+
+```{r prediccion_modelo_regLogistica, size="small"}
+vlaores_variables_explicativas <- data.frame(x1 = 'S', x2 = 90)
+predict(modelo_para_prediccion2,vlaores_variables_explicativas, type="response")
+vlaores_variables_explicativas2 <- data.frame(x1 ='S', x2 = 90,x3='Barcelona')
+predict(mymod3,vlaores_variables_explicativas2, type="response")
+```
+
+##2.4. Bondad del ajuste
+Usa el test de Hosman-Lemeshow para ver la bondad de ajuste del modelo final escogido. En la librería (ResourceSelection) hay una función que ajusta el test de Hosmer- Lemeshow.
+```{r bondad_ajuste, size="small"}
+#library(ResourceSelection)
+hl<-hoslem.test(mymod2$y,fitted(mymod2))
+hl
+#This gives p=0.69, indicating no evidence of poor fit. This is good, since here we know the model is indeed correctly specified. We can also obtain a table of observed vs expected, from our hl object:
+cbind(hl$observed,hl$expected)
+```
+
+##2.5. Curva ROC
+Dibujar la curva ROC, y calcular el área debajo de la curva.Discutir el resultado.
+
+```{r curva_roc, size="small"}
+plotROC(mymod2$y,fitted(mymod2))
+plotROC(mymod1$y,fitted(mymod1))
+plotROC(mymod3$y,fitted(mymod3))
+

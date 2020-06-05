@@ -1,0 +1,459 @@
+---
+title: "Práctica 2 Competición Titanic en kaggle "
+author: "Javier Maestre Deusto y Miguel López Marzabal"
+date: '`r format(Sys.Date(),"%e de %B, %Y")`'
+output:
+  pdf_document: 
+    toc: yes
+    toc_depth: 3
+  html_document:
+    df_print: paged
+---
+
+\newpage
+
+# Configuración, carga de librerías y definición de funciones.
+
+Realizamos la carga de las librerías necesarias
+```{r load_libraries, echo = TRUE}
+library(knitr)
+library(kableExtra)
+#library(faraway)
+library(tinytex, lib.loc = "/usr/local/lib/R/site-library")
+library(stringr, lib.loc = "/usr/local/lib/R/site-library")
+#library(hms, lib.loc = "/usr/local/lib/R/site-library")
+library(ggplot2, lib.loc = "/usr/local/lib/R/site-library")
+#library(ggpubr)
+library(car)
+library(corrplot) #para los gráficos de correlaciones
+#library(InformationValue)
+#library(cowplot)
+#library(ResourceSelection)
+#library(lmtest, lib.loc = "/usr/local/lib/R/site-library")
+#library(DAAG)
+#library(caret)
+#library(readr)
+library(rpart, lib.loc = "/usr/lib/R/library")
+library(VIM, quietly = TRUE)
+library(randomForest)
+library(party)
+library(dplyr)
+library(FactoMineR)
+library(factoextra)
+```
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## Bajar tamaño fuente del chunk al generar pdf
+## (https://stackoverflow.com/questions/25646333/code-chunk-font-size-in-rmarkdown-with-knitr-and-latex)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\n \\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```  
+
+```{r lectura_fichero, size="small"}
+#leemos el fichero train
+train <- read.csv("titanic/train.csv")
+#leemos el fichero test
+test <- read.csv("titanic/test.csv")
+str(train)
+summary(train)
+```
+
+# 1. Descripción del dataset. ¿Por qué es importante y qué pregunta/problema pretende responder?
+
+Se trata de un dataset compuesto por los pasajeros del Titanic y cual fue su desenlace, si sobrevivieron o no.
+La finalidad del estudio es predecir cual fué el destino final de un conjunto de pasajeros en los cuales no hay datos del desenlace. Este estudio forma parte de una competición abierta en el portal de ciencia de datos Kaggle, por lo que está ampliemente documentado y existe una gran diversidad de métodos por los cuales se puede obtener el resultado. La competición está basada en el porcentaje de acierto de la predicción hecha.
+El dataset está compuesto por los siguientes campos:
+| Variable | Definition |	Key |
+|----------|------------|-----|
+| survival | Survival |	0 = No, 1 = Yes |
+|pclass |	Ticket class | 	1 = 1st, 2 = 2nd, 3 = 3rd |
+|sex | Sex | |
+|Age | Age in years | | 	
+|sibsp |	# of siblings / spouses aboard the Titanic | | 	
+|parch |	# of parents / children aboard the Titanic | |	
+|ticket |	Ticket number | |	
+|fare |	Passenger fare | | 	
+|cabin | Cabin number | |
+|embarked  |	Port of Embarkation |	C = Cherbourg, Q = Queenstown, S = Southampton |
+
+** Variable Notes **
+
+pclass: A proxy for socio-economic status (SES)
+1st = Upper
+2nd = Middle
+3rd = Lower
+
+age: Age is fractional if less than 1. If the age is estimated, is it in the form of xx.5
+
+sibsp: The dataset defines family relations in this way...
+Sibling = brother, sister, stepbrother, stepsister
+Spouse = husband, wife (mistresses and fiancés were ignored)
+
+parch: The dataset defines family relations in this way...
+Parent = mother, father
+Child = daughter, son, stepdaughter, stepson
+Some children travelled only with a nanny, therefore parch=0 for them.
+
+# 2. Integración y selección de los datos de interés a analizar.
+
+En este apartado, a parte de la integración y selección de datos, vamos a realizar conversión(construcción de atributos, agregación?, normalización?, discretización?, jerarquía de conceptos?) y si es necesario reducción. 
+```{r integracion_y_seleccion, size="small"}
+#leemos el fichero train
+train <- read.csv("titanic/train.csv")
+#leemos el fichero test
+test <- read.csv("titanic/test.csv")
+#mostramos la estructura del dataset para ver tipos de variables
+str(train)
+#mostramos un resumen numérico de las variables del dataset
+summary(train)
+#juntamos train + test añadiendo a test el campo Survived a Na
+#vamos a trabajar con todos los datos para analizar mejor las variables, corregir y limpiar cualquier cosa 
+muestra<-rbind(train,cbind(test, Survived = rep(NA,418)))
+
+```
+```{r conversion_ingenieria_variables, size="small"}
+#TRABAJO CON TICKET
+muestra$TktNum <- NA
+# Partimos ticket para obtener el prefijo(o Na si no hay)
+muestra[,c('TktPre','TktNum')] <- str_match(muestra$Ticket, '(.* )?([0-9]+)' ) [,-1]
+
+#cuando varias personas viajan juntas puede que compartan ticket
+tableTickets <- table(muestra$TktNum)
+TicketFreq <- as.numeric(tableTickets[as.character(muestra$TktNum)])
+#Nos vale para ver que personas viajaban solas sin amigos ni familiares
+#mostramos frecuencia de los datos
+table(TicketFreq)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ TicketFreq, FUN=function(x) {sum(x)/length(x)})
+muestra$TicketFreq<-TicketFreq
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+#TRABAJO CON NAME
+Nombres <- as.character(muestra$Name)
+#Partimos por la coma
+ApellidoYResto<-str_split(Nombres,',',simplify=TRUE)
+#Nos quedamos con el apellido, no hace falta eliminar espacios
+Apellido<-ApellidoYResto[,1]
+
+#partimos por el punto y nos quedamos con el título
+Titulo<-str_split(ApellidoYResto[,2],'\\.',simplify=TRUE)[,1]
+#eliminamos el espacio anterior
+Titulo <- sub(' ', '', Titulo)
+#mostramos frecuencia de los datos
+table(Titulo)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ Titulo, FUN=function(x) {sum(x)/length(x)})
+#Vamos a combinar los titulos poco frecuentes en relación a su porcentaje de supervivencia 
+Titulo[Titulo %in% c('Col', 'Major')] <- 'titulogrupo05'
+Titulo[Titulo %in% c('Dona', 'Lady', 'the Countess', 'Mlle', 'Mme', 'Ms', 'Sir')] <- 'titulogrupo1'
+Titulo[Titulo %in% c('Jonkheer', 'Don', 'Capt', 'Rev')] <- 'titulogrupo0'
+# Convert to a factor
+Titulo <- as.factor(Titulo)
+#mostramos frecuencia de los datos
+table(Titulo)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ Titulo, FUN=function(x) {sum(x)/length(x)})
+muestra$Titulo<-Titulo
+
+
+#CONSTRUCCION DE FAMILIAS DE PASAJEROS
+#vemos el tamaño de familia de cada individuo
+FamSize <- muestra$SibSp+muestra$Parch + 1
+#mostramos frecuencia de los datos
+table(FamSize)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FamSize, FUN=function(x) {sum(x)/length(x)})
+#parece que hay familias incompletas de 7,6,5,4 miembros!!!!PENSAR COMO RESOLVER ESTO
+muestra$FamSize<-FamSize
+
+
+#PASAJEROS QUE VIAJAN SOLOS
+#el tamaño de familia solo nos indica si tiene familia, con esto sabemos si tampoco viajaba con amigos o amante o algo así. 
+LoneWolfs <- FamSize == 1 & TicketFreq==1 
+#mostramos frecuencia de los datos
+table(LoneWolfs)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ LoneWolfs, FUN=function(x) {sum(x)/length(x)})
+#añadimos al dataset
+muestra$LoneWolfs<-LoneWolfs
+#Hay 4 Nas que hay que corregir, viene de Ticket
+muestra[is.na(muestra$LoneWolfs),]
+muestra[is.na(muestra$LoneWolfs),]$TktNum <- 'LINE'
+muestra[is.na(muestra$LoneWolfs),]$TktPre <- 'LINE'
+muestra[is.na(muestra$LoneWolfs),]$LoneWolfs <- TRUE
+
+
+# probamos A UNIR NUMERO DE TICKET para obtener mejores grupos familiares Y AGRUPAMOS DE OTRA FORMA
+FamilyIDTK <- paste(as.character(FamSize), Apellido, muestra$TktNum, sep="")
+#mostramos frecuencia de los datos
+table(FamilyIDTK)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FamilyIDTK, FUN=function(x) {sum(x)/length(x)})
+#agrupamos las familias pequeñas
+FamilyIDTKGrouped<-FamilyIDTK
+FamilyIDTKGrouped[FamSize <= 1] <- 'Alone'
+#vemos cuantas parejas sobrevivieron a medias, todos o ninguno
+coupleSurvRate<-aggregate(muestra$Survived[FamSize ==2] ~ FamilyIDTKGrouped[FamSize ==2], FUN=function(x) {sum(x)/length(x)})
+table(as.factor(coupleSurvRate[,2]))
+#ver si merece la pena usar el porcentaje de supervivencia familiar, hay varias teorías acerca de la supervivencia
+#en funcion de cuantas personas de la familia hayan sobrevivido
+#vamos a crear un porcentaje de supervivencia familiar que nos dice cuantos familiares sobreviven.
+familySurvRate<-aggregate(muestra$Survived ~ FamilyIDTKGrouped, FUN=function(x) {sum(x)/length(x)})
+familySurvRate
+#acortamos más los grupos de edad
+FamilyIDTKGrouped[FamSize == 2] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDTKGrouped)
+# agrupamos las familias que deberían tener 3 o más familiares pero en el recuento no aparecen.
+famIDs <- data.frame(table(FamilyIDTKGrouped))
+Alones <- famIDs[famIDs$Freq <= 1,]
+FamilyIDTKGrouped[FamilyIDTKGrouped %in% Alones$FamilyIDTKGrouped] <- 'Alone'
+Smalls <- famIDs[famIDs$Freq == 2,]
+FamilyIDTKGrouped[FamilyIDTKGrouped %in% Smalls$FamilyIDTKGrouped] <- 'Small'
+#mostramos frecuencia de los datos
+table(FamilyIDTKGrouped)
+#vemos proporcion de supervivencia de las familias
+aggregate(muestra$Survived ~ FamilyIDTKGrouped, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos por numero de miembros
+numerodemiembrosgrupos<-as.numeric(table(FamilyIDTKGrouped)[as.character(FamilyIDTKGrouped)])
+aggregate(muestra$Survived ~ numerodemiembrosgrupos, FUN=function(x) {sum(x)/length(x)})
+# Convertimos a factor
+#FamilyIDTKGrouped <- factor(FamilyIDTKGrouped)
+#añadimos al dataset
+muestra$FamilyIDTKGrouped<-FamilyIDTKGrouped
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+#TRABAJO CON Parch
+#vamos a ver si las madres tuvieron más provabilidades de sobrevivir que las no madres
+IsMother <- Titulo == "Mrs" & muestra$Parch > 0
+#mostramos frecuencia de los datos
+table(IsMother)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ IsMother, FUN=function(x) {sum(x)/length(x)})
+#añadimos al dataset
+muestra$IsMother<-IsMother
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+#TRABAJO CON Embarqued
+
+#mostramos frecuencia de los datos
+table(muestra$Embarked)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ muestra$Embarked, FUN=function(x) {sum(x)/length(x)})
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+#TRABAJO CON Fare
+#usamos la función cut para separar en grupos o categorías
+FareGroups<-cut(muestra$Fare, 16, include.lowest=TRUE)
+#mostramos frecuencia de los datos
+table(FareGroups)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FareGroups, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos y el sexo
+aggregate(muestra$Survived ~ FareGroups+muestra$Sex, FUN=function(x) {sum(x)/length(x)})
+table(FareGroups[muestra$Sex=='female'])
+table(FareGroups[muestra$Sex=='male'])
+#añadimos al dataset
+muestra$FareGroups<-FareGroups
+
+#podemos obtener un fare por persona dividiendo el coste entre el número de tickets iguales
+FareIndividual<-muestra$Fare/muestra$TicketFreq
+muestra$FareIndividual<-FareIndividual
+#creamos grupos para faresindividuales
+FareIndGroups<-cut(muestra$FareIndividual, 16, include.lowest=TRUE)
+#mostramos frecuencia de los datos
+table(FareIndGroups)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ FareIndGroups, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos y el sexo
+aggregate(muestra$Survived ~ FareIndGroups+muestra$Sex, FUN=function(x) {sum(x)/length(x)})
+table(FareIndGroups[muestra$Sex=='female'])
+table(FareIndGroups[muestra$Sex=='male'])
+#añadimos al dataset
+muestra$FareIndGroups<-FareIndGroups
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+#TRABAJO CON EDAD
+hist(muestra$Age, ylab="frecuencia absoluta", xlab="Age", breaks= 6, col="darkgray")
+#usamos la función cut para separar en grupos o categorías
+ageGroups<-cut(muestra$Age, 5, include.lowest=TRUE)
+#mostramos frecuencia de los datos
+table(ageGroups)
+#vemos proporcion de supervivencia de los grupos
+aggregate(muestra$Survived ~ ageGroups, FUN=function(x) {sum(x)/length(x)})
+#vemos proporcion de supervivencia de los grupos y el sexo
+aggregate(muestra$Survived ~ ageGroups+muestra$Sex, FUN=function(x) {sum(x)/length(x)})
+#añadimos al dataset
+muestra$ageGroupsByCut<-ageGroups
+
+
+
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+#-----------------------------------------------------------------------------------------------------------------------------------------
+
+
+```
+
+# 3. Limpieza de los datos.
+# 3.1. ¿Los datos contienen ceros o elementos vacíos? ¿Cómo gestionarías cada uno de estos casos?
+```{r limpieza_valores_perdidos, size="small"}
+
+#Limpieza de TicketFreq
+muestra[is.na(muestra$TicketFreq),]
+muestra$TicketFreq[is.na(muestra$TicketFreq)]<-1
+
+#Limpieza de si viaja solo
+#Hay 4 Nas que hay que corregir, viene de Ticket
+muestra[is.na(muestra$LoneWolfs),]
+muestra[is.na(muestra$LoneWolfs),]$TktNum <- 'LINE'
+muestra[is.na(muestra$LoneWolfs),]$TktPre <- 'LINE'
+muestra[is.na(muestra$LoneWolfs),]$LoneWolfs <- TRUE
+
+#Limpieza Embarked
+# existen 2 elementos sin embarked o con el en blanco
+muestra[muestra$Embarked=='',]
+#No encuentro nada que me pueda indicar el puerto de embarque así que ponemos S que es la más frecuente
+muestra[muestra$Embarked=='',]$Embarked<-'S'
+
+#Limpieza Fare
+#Valores perdidos
+muestra[is.na(muestra$Fare),]
+#rellenamos el valor perdido con el fare medio para su clase,su sexo y su numero de hijos, omitimos Nas.
+muestra$Fare[is.na(muestra$Fare)] <- median(na.omit(muestra$Fare[muestra$Pclass==3 & muestra$Sex=="male" & muestra$Parch==0]))
+
+#valores a 0
+muestra[muestra$Fare==0,]
+boxplot(muestra$Fare,
+        data = muestra,
+        ylab = "Fare del pasajero",
+        main = "grafico de caja de Fare") 
+boxplot.stats(muestra$Fare)$out 
+#Parece que la variable está bastante afectada por los valores extremos, hay algun fare muy elevado.
+boxplot(muestra[muestra$Fare!=0,]$Fare,
+        data = muestra,
+        ylab = "Fare del pasajero",
+        main = "grafico de caja de Fare") 
+boxplot.stats(muestra$Fare)$out 
+#quitando los valores a 0 vemos que no varía nada los extremos superiores.
+# tendríamos que ver que hacer con los outliers superiores
+# podemos comprobar la Fare más alta de Test y el resto igual podemos no usarlo o agruparlo, dependiendo del porcentaje de supervivencia
+
+
+#LIMPIEZA Age
+
+#Imputamos los valores perdidos por la media de edad de cada titulo
+muestra[is.na(muestra$Age),]
+#obtenemos las edades medias de los grupos  
+aggregate(muestra$Age ~ ageGroups, FUN=function(x) {sum(x)/length(x)})
+#obtenemos las edades medias de los Titulos  
+mediasTitulos<-aggregate(muestra$Age ~ Titulo, FUN=function(x) {sum(x)/length(x)})
+#vemos cuantos valores perdidos hay dentro de cada Titulo
+table(Titulo[is.na(muestra$Age)])
+#asignamos la media del título a cada elemento
+TitleAges <- mediasTitulos$`muestra$Age`[match(unlist(Titulo), mediasTitulos$Titulo)]
+#Creamos una nueva variable en el dataset con todos los valores de Age + imputaciones
+muestra$Ages <- ifelse(is.na(muestra$Age), TitleAges, muestra$Age)
+#sustituimos en la columna buena
+#VAMOS A PROBAR INICIALMENTE CON ESTE MÉTODO, PARECE MÁS FIABLE DE ENTRADA
+#El resto de los metodos de imputación parecen algo pobres habría que pulirlos un poco
+muestra$Age <- ifelse(is.na(muestra$Age), TitleAges, muestra$Age)
+
+
+```
+# 3.2. Identificación y tratamiento de valores extremos.
+```{r limpieza_valores_estremos, size="small"}
+#Habría que tratar los valores extremos de Fare
+
+```
+# 4. Análisis de los datos.
+# 4.1. Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar).
+```{r planificacion_analisis, size="small"}
+
+
+```
+# 4.2. Comprobación de la normalidad y homogeneidad de la varianza.
+```{r comprobacion_normalidad_y_homocedasticidad, size="small"}
+
+
+```
+# 4.3. Aplicación de pruebas estadísticas para comparar los grupos de datos. En función de los datos y el objetivo del estudio, aplicar pruebas de contraste de hipótesis, correlaciones, regresiones, etc. Aplicar al menos tres métodos de análisis diferentes.
+```{r pruebas_estadisticas_metodo1, size="small"}
+
+# Partimos el dataset en los conjuntos iniciales de train y test.
+train2 <- muestra[1:891,]
+test2 <- muestra[892:1309,]
+
+# Predicciones por condition inference tree Random Forest
+## set the seed to make your partition reproducible
+set.seed(123)
+#creamos un conjunto de entrenamiento y test propios a partir de train
+train3<-train2
+#convertimos a factor la agrupacion por familias para poder usarlo en el cforest
+train3$FamilyIDTKGrouped<-as.factor(train3$FamilyIDTKGrouped)
+#creamos un conjunto de entrenamiento y test propios a partir de train para calcular nuestros porcentaje de acierto
+## 85% of the sample size
+smp_size <- floor(0.85 * nrow(train3))
+train_ind <- sample(seq_len(nrow(train3)), size = smp_size)
+train4 <- train3[train_ind, ]
+test4 <- train3[-train_ind, ]
+test4Survival<-test4$Survived
+test4$Survived <- NA
+
+set.seed(400)
+fit <- cforest(as.factor(Survived) ~ Pclass + Sex + Age + SibSp + Parch + Fare + Embarked + Titulo + FamSize +FamilyIDTKGrouped,
+               data = train4, controls=cforest_unbiased(ntree=2000, mtry=3)) 
+# hacemos la predicción y la guardamos en formato de envio 
+Prediction <- predict(object = fit, newdata=test4, OOB=TRUE, type = "response")
+submittest3cf <- data.frame(PassengerId = test3$PassengerId, Survived = Prediction)
+#escribimos fichero
+#write.csv(submit, file = "ciforest.csv", row.names = FALSE)
+#Vamos a comparar el resultado con las observaciones de la variable y construir una matriz de acierto
+t_cont_prediccion_contra_observación<- xtabs(~test4Survival+submittest3cf$Survived)
+print("Tabla de contingencia de predicciones survival contra observaciones survival")
+t_cont_prediccion_contra_observación
+sumatorios_filas <- rowSums(t_cont_prediccion_contra_observación)
+sumatorios_columnas <- colSums(t_cont_prediccion_contra_observación)
+total_elementos <- sum(t_cont_prediccion_contra_observación)
+# obtenemos los porcentages de aciertos de 1s(Sensitivity) y 0s(specificity)
+porcentaje_de_acierto <- t_cont_prediccion_contra_observación[,1]/sumatorios_filas
+porcentaje_de_acierto[2]<-1-porcentaje_de_acierto[2] 
+porcentaje_de_acierto
+print("Matriz de porcentage de aciertos del modelo")
+matriz_aciertos<-cbind(t_cont_prediccion_contra_observación,porcentaje_de_acierto)
+print("acierto general del modelo")
+acierto_tortal <-  (t_cont_prediccion_contra_observación[1,1]+t_cont_prediccion_contra_observación[2,2])/total_elementos
+acierto_tortal
+kable(matriz_aciertos, caption = paste("Matriz de acierto del modelo. acierto global:",acierto_tortal))%>%
+kable_styling(latex_options = c("striped", "hold_position"), position = "center", font_size = 8)%>%
+add_header_above(c(" ", "(Prediccion survival)" = 2," "), bold = T, italic = T)%>%
+pack_rows("(Observacioens survival)", 1, 2)
+
+```
+
+```{r pruebas_estadisticas_metodo2, size="small"}
+
+
+```
+
+```{r pruebas_estadisticas_metodo3, size="small"}
+
+
+```
+
+# 5. Representación de los resultados a partir de tablas y gráficas.
+```{r representacion_grafica_y_tabular, size="small"}
+
+
+```
+# 6. Resolución del problema. A partir de los resultados obtenidos, ¿cuáles son las conclusiones? ¿Los resultados permiten responder al problema?
