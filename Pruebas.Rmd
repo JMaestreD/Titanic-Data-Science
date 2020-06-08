@@ -8,6 +8,8 @@ output:
     toc_depth: 3
   html_document:
     df_print: paged
+editor_options: 
+  chunk_output_type: console
 ---
 
 \newpage
@@ -16,6 +18,12 @@ output:
 
 Realizamos la carga de las librerías necesarias
 ```{r load_libraries, echo = TRUE}
+location_library <- NULL
+location_library2 <- NULL
+if(Sys.info()[[4]]!="ASUS-WIN10-X64") {
+  location_library <- "/usr/local/lib/R/site-library"
+  location_library2 <- "/usr/lib/R/library"
+}
 library(knitr)
 library(kableExtra)
 #library(faraway)
@@ -23,17 +31,28 @@ library(tinytex, lib.loc = "/usr/local/lib/R/site-library")
 library(stringr, lib.loc = "/usr/local/lib/R/site-library")
 #library(hms, lib.loc = "/usr/local/lib/R/site-library")
 library(ggplot2, lib.loc = "/usr/local/lib/R/site-library")
+library(tinytex, lib.loc = location_library)
+library(stringr, lib.loc = location_library)
+#library(hms, lib.loc = location_library)
+library(ggplot2, lib.loc = location_library)
 #library(ggpubr)
 library(car)
 library(corrplot) #para los gráficos de correlaciones
 library(InformationValue)
 #library(cowplot)
+<<<<<<< HEAD
 library(ResourceSelection)
 library(lmtest, lib.loc = "/usr/local/lib/R/site-library")
 library(DAAG)
 library(caret)
+=======
+#library(ResourceSelection)
+#library(lmtest, lib.loc = location_library)
+#library(DAAG)
+#library(caret)
+>>>>>>> 8719e06c071e5ccf5020a752c7cbe8f9b23babd8
 #library(readr)
-library(rpart, lib.loc = "/usr/lib/R/library")
+library(rpart, lib.loc = location_library2)
 library(VIM, quietly = TRUE)
 library(randomForest)
 library(party)
