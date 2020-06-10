@@ -73,8 +73,10 @@ knitr::knit_hooks$set(chunk = function(x, options) {
 # 1. Descripción del dataset. ¿Por qué es importante y qué pregunta/problema pretende responder?
 
 Se trata de un dataset compuesto por los pasajeros del Titanic y cual fue su desenlace, si sobrevivieron o no.
-La finalidad del estudio es predecir cual fué el destino final de un conjunto de pasajeros en los cuales no hay datos del desenlace. Este estudio forma parte de una competición abierta en el portal de ciencia de datos Kaggle, por lo que está ampliemente documentado y existe una gran diversidad de métodos por los cuales se puede obtener el resultado. La competición está basada en el porcentaje de acierto de la predicción hecha.
-El dataset está compuesto por los siguientes campos:
+La finalidad del estudio es predecir cual fué el destino final de un conjunto de pasajeros en los cuales no hay datos del desenlace. Este estudio forma parte de una competición abierta en el portal de ciencia de datos Kaggle, por lo que está ampliemente documentado y existe una gran diversidad de métodos por los cuales se puede obtener el resultado. La competición está basada en el porcentaje de acierto de la predicción hecha.  
+
+El dataset está compuesto por los siguientes campos:  
+
 
 | Variable |            Definition                      |	             Key                               |
 |----------|--------------------------------------------|------------------------------------------------|
@@ -110,10 +112,10 @@ Some children travelled only with a nanny, therefore parch=0 for them.
 
 # 2. Integración y selección de los datos de interés a analizar.
 
-En este apartado, a parte de la integración y selección de datos, vamos a realizar conversión(construcción de atributos, agregación?, normalización?, discretización?, jerarquía de conceptos?) y si es necesario reducción. 
+En este apartado, a parte de la integración y selección de datos, vamos a realizar conversión(construcción de atributos, agregación, normalización, discretización).
 
 Unimos los conjuntos de train y test para analizar los datos al completo
-```{r integracion_y_seleccion, size="small",echo=FALSE}
+```{r integracion_y_seleccion, size="small",echo=FALSE, warning=FALSE}
 #leemos el fichero train
 train <- read.csv("titanic/train.csv")
 #leemos el fichero test
@@ -135,9 +137,11 @@ En este documento vamos a separar el trabajo hecho en cada variable, por tanto i
 Partimos el campo ticket en prefijo y número de ticket.
 A partir del numero de ticket obtenemos grupos en función de la cantidad de numero del número de ticket y vemos como se relaciona con sobrevivir.
 Vemos como se relacionan los prefijos del ticket con sobrevivir.
-Obtenemos una variable que nos indica la catidad de números de tickets(TicketFreq) iguales y vemos su relacion con sobrevivir. Hemos tenido que corregir 4 casos de valores perdidos en nuestra nueva variable debido a que estos casos no tenian número de ticket.
+Obtenemos una variable que nos indica la catidad de números de tickets(TicketFreq) iguales y vemos su relacion con sobrevivir. Hemos tenido que corregir 4 casos de valores perdidos en nuestra nueva variable debido a que estos casos no tenian número de ticket.  
 
-```{r pruebas_mrzs_Ticket, size="small",echo=FALSE}
+  
+  
+```{r pruebas_mrzs_Ticket,fig.width=7, fig.height=4, size="small",echo=FALSE, warning=FALSE}
 #TRABAJO CON TICKET
 muestra$TktNum <- NA
 # Partimos ticket para obtener el prefijo(o Na si no hay)
@@ -213,20 +217,22 @@ ggplot(countsClassVar, aes(fill=Survived, y=Counts, x=TicketFreq)) +
 
 ```
 
+---
+
 ### Trabajo con Name
 
 Partimos el campo name para obtener por un lado el Apellido del pasajero y por otro lado el título que recibe esa persona. 
 
-Agrupamos los titulos poco frecuentes en tres grupos según su probabilidad de supervivencia, los que todas las personas con ese título han muerto van a 'titulogrupo0', si han sobrevivido todos a 'titulogrupo1' y si la probabilidad es diferente al grupo 'titulogrupo05'. Comprovamos que la relación de los grupos con supervivencia.
+1. Agrupamos los titulos poco frecuentes en tres grupos según su probabilidad de supervivencia, los que todas las personas con ese título han muerto van a 'titulogrupo0', si han sobrevivido todos a 'titulogrupo1' y si la probabilidad es diferente al grupo 'titulogrupo05'. Comprovamos que la relación de los grupos con supervivencia.
 
-Creamos una nueva variable llamada FamSize que nos indica el número de familiares a bordo, esto se obtiene con 'SibSp + Parch + 1'. Mostramos gáficamente la relación con supervivencia. 
+2. Creamos una nueva variable llamada FamSize que nos indica el número de familiares a bordo, esto se obtiene con 'SibSp + Parch + 1'. Mostramos gáficamente la relación con supervivencia. 
 
-Creamos una nueva variable 'LoneWolfs' que nos indica si una persona viaja totalmente sola, eso lo obtenemos con los elementos que cumplen esta condición 'FamSize == 1 & TicketFreq==1' y visualizamos la relación de la nueva variable con sobrevivir.
+3. Creamos una nueva variable 'LoneWolfs' que nos indica si una persona viaja totalmente sola, eso lo obtenemos con los elementos que cumplen esta condición 'FamSize == 1 & TicketFreq==1' y visualizamos la relación de la nueva variable con sobrevivir.
 
-Vamos a agrupar las familias para ver exactamente cuantos familiares viajaban juntos. Esto lo haremos concatenando el Apellido con el número de familiars y el número de ticket. Hemos añadido el número de ticket porque si solo juntamos apellido y número de familiares se mezclaban familias que coincidían en apellido y numero de familiares pero viajaban con diferente ticket. Tras agruparlos correctamente creamos grupos genéricos según el número real de familiares que viajaban juntos.
+4. Vamos a agrupar las familias para ver exactamente cuantos familiares viajaban juntos. Esto lo haremos concatenando el Apellido con el número de familiars y el número de ticket. Hemos añadido el número de ticket porque si solo juntamos apellido y número de familiares se mezclaban familias que coincidían en apellido y numero de familiares pero viajaban con diferente ticket. Tras agruparlos correctamente creamos grupos genéricos según el número real de familiares que viajaban juntos.
 Finalmente visualizamos la relación de nuestra nueva variable 'FamilyIDTKGrouped' con la supervivencia.
 
-```{r pruebas_mrzs_Name, size="small", echo=FALSE}
+```{r pruebas_mrzs_Name,fig.width=7, fig.height=4, size="small", echo=FALSE, warning=FALSE}
 #TRABAJO CON NAME
 Nombres <- as.character(muestra$Name)
 #Partimos por la coma
@@ -420,13 +426,15 @@ familyticket<-paste(FamilyID , TicketFreq)
 
 ```
 
+---
+
 ### Trabajo con Parch
 
 Creamos una nueva variable que nos indica si la persona es una madre o no. Esta variable se obtiene de las observacviones que cumplen la condicion de tener el título 'Mrs' y que la variable Parch que indica el número de hijos o padres sea mayo que 0.
 Visualizamos la relación de nuestra nueva variable 'IsMother' con la supervivencia.
 
 
-```{r pruebas_mrzs_Parch, size="small",echo=FALSE}
+```{r pruebas_mrzs_Parch,fig.width=7, fig.height=4, size="small",echo=FALSE, warning=FALSE}
 
 #TRABAJO CON Parch
 #vamos a ver si las madres tuvieron más provabilidades de sobrevivir que las no madres
@@ -460,7 +468,7 @@ ggplot(countsClassVar, aes(fill=Survived, y=Counts, x=IsMother)) +
 En esta variable nos encontramos varios valores perdidos que sustituimos por el valor más frecuente.
 Visualizamos la relación de Embarqued con la supervivencia.
 
-```{r pruebas_mrzs_Embarked, size="small",echo=FALSE}
+```{r pruebas_mrzs_Embarked,fig.width=7, fig.height=4, size="small",echo=FALSE, warning=FALSE}
 #TRABAJO CON Embarqued
 
 #mostramos frecuencia de los datos
@@ -497,17 +505,17 @@ Existen demasiados valores perdidos y no tenemos una forma buena de predecirlos,
 ### Trabajo con Fare
 
 Existen varios valores perdidos que sustituimos por la mediana del 'Fare' en función de la clase, el sexo y el número de hijos. 
-También existen ciertos pasajeros con Fare 0, pero los vamos a dejar como están.
-
-Vemos el gráfico de caja de la variable y observamos que exiten valores extremos que pueden afectar a la variable para solucionar esto vamos agrupamos Fare en categorías y añadimos los valores extremos a la última categoría. La agrupación se crea en la variable 'FareGroups' y visualizamos la relación de nuestras categorías con la supervivencia.
-
-Otenemos una nueva variable con el Fare individual de cada persona, que obtenemos de dividir el Fare por el número de tickets iguales. Vemos que esta variable también está afectada por valores extremos, por lo que creamos una agrupación como en el caso de Fare(FareIndGroups) y visualizamos la relación de nuestros nuevos grupos con la supervivencia.  
-
+También existen ciertos pasajeros con Fare 0, pero los vamos a dejar como están.  
+  
+Vemos el gráfico de caja de la variable y observamos que exiten valores extremos que pueden afectar a la variable para solucionar esto vamos agrupamos Fare en categorías y añadimos los valores extremos a la última categoría. La agrupación se crea en la variable 'FareGroups' y visualizamos la relación de nuestras categorías con la supervivencia.  
+  
+Otenemos una nueva variable con el Fare individual de cada persona, que obtenemos de dividir el Fare por el número de tickets iguales. Vemos que esta variable también está afectada por valores extremos, por lo que creamos una agrupación como en el caso de Fare(FareIndGroups) y visualizamos la relación de nuestros nuevos grupos con la supervivencia.    
+  
 Como idea feliz vamos a probar a juntar las variables de Fare y sex, ya que hay diferencias significativas en la supervivencia de hombres y mujeres. 
 Creamos una nueva variable 'FareIndividualBySex' que incrementa el Fare de las mujeres en 60, con esto conseguimos paliar un poco los efectos de los valores extremos, pero tendremos que analizar más adelante si es útil o no. También creamos una variable(FareIndividualBySexGroups) que agrupe estos nuevos Fares y visualizamos la relación de nuestros grupos con la supervivencia.
 
 
-```{r pruebas_mrzs_Fare, size="small",echo=FALSE}
+```{r pruebas_mrzs_Fare,fig.width=7, fig.height=4, size="small",echo=FALSE, warning=FALSE}
 #TRABAJO CON Fare
 
 #Limpieza
@@ -662,7 +670,7 @@ Visualizando el gráfico de caja de la variable observamos que hay algunos Outli
 
 Creamos una nueva variable que nos indica si una persona menor de 16 años está viajando sola y visualizamos la relación con la supervivencia.
 
-```{r pruebas_mrzs_Edad, size="small", echo=FALSE}
+```{r pruebas_mrzs_Edad,fig.width=7, fig.height=4, size="small", echo=FALSE, warning=FALSE}
 #TRABAJO CON EDAD
 par(mfrow=c(1,1))
 hist(muestra$Age, ylab="frecuencia absoluta", xlab="Age", breaks= 6, col="darkgray")
@@ -905,7 +913,7 @@ ggplot(countsClassVar, aes(fill=Survived, y=Counts, x=youngTravelAl)) +
 ### Trabajo con Pclass
 Pclas está como integer pero realmente es una categórica, podemos crear una nueva varable tipo factor PclassFactor
 
-```{r pruebas_mrzs_Pclass, size="small", echo=FALSE}
+```{r pruebas_mrzs_Pclass,fig.width=7, fig.height=4, size="small", echo=FALSE, warning=FALSE}
 
 #TRABAJO CON PCLASS
 #vamos a crear una variable con pclass factorizada
@@ -929,7 +937,7 @@ ggplot(countsClassVar, aes(fill=Survived, y=Counts, x=PclassFactor)) +
 ```
 
 # 3. Limpieza de los datos.
-# 3.1. ¿Los datos contienen ceros o elementos vacíos? ¿Cómo gestionarías cada uno de estos casos?
+## 3.1. ¿Los datos contienen ceros o elementos vacíos? ¿Cómo gestionarías cada uno de estos casos?
 
 En la variable Ticket:
 Hemos tenido que corregir 4 casos de valores perdidos en nuestra nueva variable debido a que estos casos no tenian número de ticket y solo aparecía la palabra LINE. Como solo nos interesa para una variable que agrupa los tamaños de número de ticket le asignamos un 0 en dicha variable, en la variable original no hacemos nada porque no va a ser utilizada.
@@ -951,7 +959,7 @@ Limpiamos los valores perdidos, esto lo vamos a hacer de varias maneras y luego 
 Generamos un modelo para predecir el logaritmo de la edad(esto mejora la falta de normalidad de la variable Age) a partir de las variables Pclass, SibSp, Parch, Fare, Sex, Embarked, IsMother, LoneWolfs, FamSize, Titulo y usamos stepAIC para que seleccione el modelo que mejor funciona, partir de esas variables se va quedando con las variables más representativas. Visualizamos los gráficos de los residuos del modelo y creamos la variable RegresionAges para almacenar las edades imputadas.
 
 
-```{r pruebas_conversion, size="small", echo=FALSE}
+```{r pruebas_conversion, size="small", echo=FALSE, warning=FALSE}
 
 #Exponenciar variables numericas para apaliar la no linearidad
 muestra.numeric <- muestra[c('Age', 'Fare')]
@@ -1028,7 +1036,7 @@ muestrascaledumy <- cbind(muestrascaledumy,dmmyEmbarked, dmmyFamilyIDTKGrouped, 
 
 ```
 
-# 3.2. Identificación y tratamiento de valores extremos.
+## 3.2. Identificación y tratamiento de valores extremos.
 
 En la variable Fare:
 Para solucionar el problema de los valores extremos vamos agrupamos Fare en categorías y añadimos los valores extremos a la última categoría.
@@ -1037,11 +1045,11 @@ En la variable Age:
 Para solucionar el problema de los valores extremos agrupamos las edades e incluimos a los valores extremos en la última categoría. 
 
 # 4. Análisis de los datos.
-# 4.1. Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar).
+## 4.1. Selección de los grupos de datos que se quieren analizar/comparar (planificación de los análisis a aplicar).
 
 Inicialmente ponemos las varaiables en grupos en función de la relación que tienen por como se han creado:
 
-"Fare","FareGroups","FareIndividual","FareIndGroups","FareIndividualBySex","FareIndividualBySexGroups",'FarePw2','FarePw3'
+"Fare", "FareGroups", "FareIndividual", "FareIndGroups", "FareIndividualBySex", "FareIndividualBySexGroups", 'FarePw2', 'FarePw3'
 
 "Name","Titulo","FamilyIDTKGrouped","FamSize","TicketFreq","IsMother"
 
@@ -1060,27 +1068,28 @@ Inicialmente ponemos las varaiables en grupos en función de la relación que ti
 Hemos probado diferentes métodos de análisis para evaluar la eficacia de las variables:
 
 ## Análisis de las variables por métodos de filtrado
+  
 Este análisis se basa en contrastar la correlación de la variables, estudiar por contrastes de hipótesis si la variables independientes tienen alguna variable que es dependiente entre las variables explicativas o viendo la information.gain de las variables(paquete FSelector).
 
 Vamos a analizar la asociacion entre variables de nuestros grupos y entre las variables y Survived:
 
-Mejor relacion con survived por grupos:
-"FareIndividualBySex","FareIndividualBySexGroups","FareIndividual"
-"IsMother","TicketFreq"
-"LoneWolfs","IsMother"
-"TicketFreq"
-"LoneWolfs","ageGroupsByCut","Age"
-"FareIndividualBySex","FareIndividualBySexGroups","Sex"
+Mejor relacion con survived por grupos:  
+"FareIndividualBySex","FareIndividualBySexGroups","FareIndividual"  
+"IsMother","TicketFreq"  
+"LoneWolfs","IsMother"  
+"TicketFreq"  
+"LoneWolfs","ageGroupsByCut","Age"  
+"FareIndividualBySex","FareIndividualBySexGroups","Sex"  
 
 Grupos de variables interesantes tras este análisis:
-"FareIndividualBySex","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass"
-"FareIndividualBySexGroups","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass",'FarePw2'
-"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass"
+"FareIndividualBySex","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass"  
+"FareIndividualBySexGroups","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass",'FarePw2'  
+"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass"  
 
 
 Mostrámos gráficamente las relaciones existentes
 
-```{r pruebas_analisis_filtros, size="small", echo=FALSE}
+```{r pruebas_analisis_filtros,fig.width=7, fig.height=4, size="small", echo=FALSE, warning=FALSE}
 #resumen estadístico de las variables del dataset sería un análisis estadístico
 #summary(muestra)
 
@@ -1208,10 +1217,11 @@ corrplot(cor(dfaux), method="number", is.corr=FALSE)
 ```
 
 ## Análisis de las variables por análisis de fatores
-El análisis de factores es similar al análisis de componetes principales, le aportamos un conjunto de variables y construye un nuevo conjunto de datos con nuevas variables que representan a los datos originales.
-Los conjuntos de datos obtenidos con este sistema no nos han dado buenos resultados-
 
-```{r pruebas_analisis_factores, size="small", echo=FALSE}
+El análisis de factores es similar al análisis de componetes principales, le aportamos un conjunto de variables y construye un nuevo conjunto de datos con nuevas variables que representan a los datos originales.  
+Los conjuntos de datos obtenidos con este sistema no nos han dado buenos resultados.
+
+```{r pruebas_analisis_factores, size="small", echo=FALSE, warning=FALSE}
 #resumen estadístico de las variables del dataset sería un análisis estadístico
 #summary(muestra)
 
@@ -1277,6 +1287,8 @@ trainFAMD <- data.frame(muestra[,1:2],res.famd$ind$coord[1:nrow(muestra),1:11])
 ## Análisis de las variables por Forward Selection, Backward Selection, Stepwise Selection
 
 En este método generamos un modelo de regresión logística y mediante stepAIC va optimizando el modelo y eliminando las variables poco significativas. 
+
+Los mejores resultados fueron aportados por Titulo + FareIndividual + Pclass + FamilyIDTKGrouped, que arrojó un 85% de acierto en subconjuntos de prueba y test creados a partir del conjunto de entrenamiento para tener una forma de estimar el porcentaje de acierto(posteriormente descubrí que este porcentaje de acierto no es buen indicador).
 
 ```{r pruebas_analisis_wrapper_methods, size="small", echo=FALSE, include=FALSE}
 
@@ -1400,13 +1412,13 @@ mymod1<-stepAIC(mymod1, direction = "both", trace = FALSE) #optimizado pierde. 8
 ## Análisis de las variables por  Backward Selection con paquete mlr
 Este método nos selecciona las variables más importantes del dataset, vamos a utilizar Backward selection que parte de todas las variables y va eliminando las menos significativas.
 
-Variables recomendadas por este método:
-"Pclass", "FareIndividualBySex", "ageGroupsByCut"
-"Pclass", "Titulo", "FamSize", "FareIndGroups", "FareIndividualBySex", "AgePw2"
-"Pclass", "KNNAgesScaled", "FareIndividualBySexScaled"
-"SibSp", "FareIndividualBySex", "AgePw3", "PclassScaled"
+Variables recomendadas por este método:  
+"Pclass", "FareIndividualBySex", "ageGroupsByCut"  
+"Pclass", "Titulo", "FamSize", "FareIndGroups", "FareIndividualBySex", "AgePw2"  
+"Pclass", "KNNAgesScaled", "FareIndividualBySexScaled"  
+"SibSp", "FareIndividualBySex", "AgePw3", "PclassScaled"  
 
-```{r pruebas_analisis_FS_BS_rlm, size="small", echo=FALSE}
+```{r pruebas_analisis_FS_BS_rlm, size="small", echo=FALSE, warning=FALSE}
 
 trainRlm <- muestrascaledumy[1:891,-c(4,9,11,13,14,20)]
 #trainRlm <- muestra[1:891,-c(4,9,11,13,14,20,54)]
@@ -1420,14 +1432,17 @@ trainRlm <- trainRlm %>% mutate_if(is.logical, as.factor)
 trainRlm.task<-makeClassifTask(data = trainRlm, target = "Survived")
 
 # Creating sample instances
-rdesc = makeResampleDesc("Holdout")
+rdesc <- makeResampleDesc("Holdout")
 
 # Setting the Sequential forward Search - "sfs"
 # for Sequential Backward Search - "sbs""
-ctrl = makeFeatSelControlSequential(method = "sbs", maxit = NA)
-
+ctrl <- makeFeatSelControlSequential(method = "sbs", maxit = NA)
+```
+```{r pruebas_analisis_FS_BS_rlm2, size="small",include=FALSE, echo=FALSE, warning=FALSE}
 # Running the selection algorithm
-res = selectFeatures("classif.rpart", trainRlm.task, rdesc, control = ctrl)
+res <- selectFeatures("classif.rpart", trainRlm.task, rdesc, control = ctrl)
+```
+```{r pruebas_analisis_FS_BS_rlm3, size="small", echo=FALSE, warning=FALSE}
 # Priting the final result.
 analyzeFeatSelResult(res)
 
@@ -1438,15 +1453,15 @@ analyzeFeatSelResult(res)
 ## Análisis de las variables por Recursive Feature Elimination Method (RFE)
 Este método es similar al anterior pero también obtenemos un listado con las variables ordenadas por importancia
 
-Variables recomendadas por este método:
-"FareIndividualBySex", "Titulo", "FareIndividual", "KNNAges", "Sex"
-FareIndividualBySex, Titulo, KNNAgesScaled
+Variables recomendadas por este método:  
+"FareIndividualBySex", "Titulo", "FareIndividual", "KNNAges", "Sex"  
+FareIndividualBySex, Titulo, KNNAgesScaled  
 
-Sin correlacion entre ellas:
-"FareIndividualBySex","Titulo","KNNAges",'PclassScaled','FamilyIDTKGrouped','Embarked','LoneWolfsDummy','youngTravelAl','IsMother','tamanoticket'
+A partir de la lista de importancia de las variables, obtenemos las más importantes que no estén relacionadas entre si:  
+"FareIndividualBySex","Titulo","KNNAges",'PclassScaled','FamilyIDTKGrouped','Embarked','LoneWolfsDummy','youngTravelAl','IsMother','tamanoticket'  
 
 
-```{r pruebas_analisis_rfe, size="small", echo=FALSE}
+```{r pruebas_analisis_rfe, size="small", echo=FALSE, warning=FALSE}
 #quitamos el 37 por el limite máximo de categorias
 #trainRFE <- muestrascaledumy[1:891,-c(4,9,11,13,14,20)]
 trainRFE <- muestra[1:891,-c(4,9,11,13,14,54)]
@@ -1471,7 +1486,7 @@ rfe_lm_profile <- rfe(training[, -2], training[, 2],
                  rfeControl = ctrl_param,
                  newdata = testing[, -2])
 
-rfe_lm_profile
+#rfe_lm_profile
 
 # Calculating variable importance
 varImp(rfe_lm_profile)
@@ -1530,11 +1545,15 @@ varImp(rfe_lm_profile)
 
 En este método utilizamos random forest, que genera árboles de decisión aleatorios y va comparando los resultados obtenidos para filtrar las variables más importantes.
 
-Variables recomendadas por este método:
-'FareIndividualBySex','Titulo','Mr','KNNAges','FIBSG14','FamilyIDTKGrouped','Pclass','tamanoticket','FIBSG51','Mrs','Miss'
-'FareIndividualBySex','Titulo','KNNAges','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy'
+Variables recomendadas por este método:   
+'FareIndividualBySex','Titulo','Mr','KNNAges','FIBSG14','FamilyIDTKGrouped','Pclass','tamanoticket','FIBSG51','Mrs','Miss'  
+'FareIndividualBySex','Titulo','KNNAges','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy'  
+'FareIndividualBySex','Titulo','ageGroupsByCut','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy'  
 
-```{r pruebas_analisis_RForest, size="small", echo=FALSE}
+Esta última selección de componentes es la que mejores resultados nos ha dado de todos los grupos de variables obtenidos en todos los análisis.    
+
+
+```{r pruebas_analisis_RForest, size="small", echo=FALSE, warning=FALSE}
 #quitamos el 37 por el limite máximo de categorias
 #trainRF <- muestrascaledumy[1:891,-c(4,9,11,13,14)]
 #testRF <- muestrascaledumy[892:1309,-c(4,9,11,13,14)]
@@ -1558,7 +1577,8 @@ varImpPlot(rfModel)
 
 
 # 4.2. Comprobación de la normalidad y homogeneidad de la varianza.
-No nos dió tiempo para completar este apartado.
+La normalidad la asumimos por el teorema central del limite, ya que la muestra es muy superior a 30 elementos, lo que nos permite asumir que las variables son normales.  
+
 ```{r comprobacion_normalidad_y_homocedasticidad, size="small"}
 
 
@@ -1570,11 +1590,13 @@ Vamos a utilizar diferentes métodos para predecir los resultados
 
 ## Prediccion por Random Forest
 
-Por este método lo aplicamos para predecir a partir de las variables: 'PassengerId','Survived',"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass"
+Este método lo aplicamos para predecir a partir de las variables:
 
-El resultado obtenido lo subimos a kaggle y nos dió: 0.779 
+'PassengerId','Survived',"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass" - el resultado obtenido lo subimos a kaggle y nos dió: 0.779 
 
-```{r pruebas_predict_rf, size="small", echo=FALSE}
+'FareIndividualBySex','Titulo','ageGroupsByCut','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy' - en kaggle obtuvimos un 0.794
+
+```{r pruebas_predict_rf, size="small", echo=FALSE, warning=FALSE}
 # Partimos el dataset en los conjuntos iniciales de train y test.
 #train2 <- muestra[1:891,c('PassengerId','Survived','Pclass','Sex','Age','SibSp','Parch','Fare','Embarked','Titulo','FamSize')] #82%
 #test2 <- muestra[892:1309,c('PassengerId','Survived','Pclass','Sex','Age','SibSp','Parch','Fare','Embarked','Titulo','FamSize')]
@@ -1693,12 +1715,13 @@ submittest3 <- data.frame(PassengerId = test2$PassengerId, Survived = Prediction
 ```
 
 ## Predicción por KNN
+
 Este método obtiene los valores de Survived en funcion de sus vecinos más proximos que encuentra a partir de la distáncia euclídea.
 Para usar este método escalamos todas las variables cuantitativas y pasamos todas las variables cualitativas a dummy, creando una variable numérica por cada uno de los factores de las variables.
 
 El resultado obtenido por este método fue subido a kaggle y dió: 0.732
 
-```{r pruebas_predict_knn, size="small", echo=FALSE}
+```{r pruebas_predict_knn, size="small", echo=FALSE, warning=FALSE}
 
 # # Predicciones por KNN
 # ## set the seed to make your partition reproducible
@@ -1844,9 +1867,9 @@ submittest3cf <- data.frame(PassengerId = train3scaledumy[892:1309,]$PassengerId
 
 ## Predicción por regresión logística
 
-Por este método hemos obtenido en kaggle un 0.784 
+Hemos probado diferentes modelos con las sugerencias de los análisis sin demasiado éxito. Por este método hemos obtenido en kaggle un 0.784 a partir de las siguientes variables: FareIndividualBySexScaled + IsMotherDummy + LoneWolfsDummy + TicketFreqScaled + ageGroupsByCut + Embarked+PclassScaled
 
-```{r pruebas_predict_rl, size="small", echo=FALSE}
+```{r pruebas_predict_rl, size="small", echo=FALSE, warning=FALSE}
 
 trainRL<-muestra
 #ajustamos los valores de referencia en los factores
@@ -1862,47 +1885,47 @@ train2 <- trainRL[1:891,]
 test2 <- trainRL[892:1309,]
 
 
-#estudio sexo
-tabla_contingencia <- xtabs(~Survived+Sex, data=train2)
-print("Tabla de contingencia de sex vs. survived")
-tabla_contingencia
-#test de independencia
-chisq.test(tabla_contingencia)
-#Cálculo de odds ratio
-my_odds_ratio <- with(train2, (tabla_contingencia[1,1]*tabla_contingencia[2,2])/(tabla_contingencia[1,2]*tabla_contingencia[2,1]))
-print("Odds ratio de sex vs. survived")
-my_odds_ratio
-#Gráfico de correlación entre variables
-chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
-corrplot(chisqresult$residuals, is.cor = FALSE)
-
-#estudio Pclass
-tabla_contingencia <- xtabs(~Survived+Pclass, data=train2)
-print("Tabla de contingencia de Pclass vs. survived")
-tabla_contingencia
-#test de independencia
-chisq.test(tabla_contingencia)
-#Cálculo de odds ratio
-my_odds_ratio <- with(train2, (tabla_contingencia[1,1]*tabla_contingencia[2,2])/(tabla_contingencia[1,2]*tabla_contingencia[2,1]))
-print("Odds ratio de sex Pclass survived")
-my_odds_ratio
-#Gráfico de correlación entre variables
-chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
-corrplot(chisqresult$residuals, is.cor = FALSE)
-
-#estudio sexo vs Pclass
-tabla_contingencia <- xtabs(~Pclass+Sex, data=train2)
-print("Tabla de contingencia de sex vs. Pclass")
-tabla_contingencia
-#test de independencia
-chisq.test(tabla_contingencia)
-#Cálculo de odds ratio
-my_odds_ratio <- with(train2, (tabla_contingencia[1,1]*tabla_contingencia[2,2])/(tabla_contingencia[1,2]*tabla_contingencia[2,1]))
-print("Odds ratio de sex vs. Pclass")
-my_odds_ratio
-#Gráfico de correlación entre variables
-chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
-corrplot(chisqresult$residuals, is.cor = FALSE)
+# #estudio sexo
+# tabla_contingencia <- xtabs(~Survived+Sex, data=train2)
+# print("Tabla de contingencia de sex vs. survived")
+# tabla_contingencia
+# #test de independencia
+# chisq.test(tabla_contingencia)
+# #Cálculo de odds ratio
+# my_odds_ratio <- with(train2, (tabla_contingencia[1,1]*tabla_contingencia[2,2])/(tabla_contingencia[1,2]*tabla_contingencia[2,1]))
+# print("Odds ratio de sex vs. survived")
+# my_odds_ratio
+# #Gráfico de correlación entre variables
+# chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
+# corrplot(chisqresult$residuals, is.cor = FALSE)
+# 
+# #estudio Pclass
+# tabla_contingencia <- xtabs(~Survived+Pclass, data=train2)
+# print("Tabla de contingencia de Pclass vs. survived")
+# tabla_contingencia
+# #test de independencia
+# chisq.test(tabla_contingencia)
+# #Cálculo de odds ratio
+# my_odds_ratio <- with(train2, (tabla_contingencia[1,1]*tabla_contingencia[2,2])/(tabla_contingencia[1,2]*tabla_contingencia[2,1]))
+# print("Odds ratio de sex Pclass survived")
+# my_odds_ratio
+# #Gráfico de correlación entre variables
+# chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
+# corrplot(chisqresult$residuals, is.cor = FALSE)
+# 
+# #estudio sexo vs Pclass
+# tabla_contingencia <- xtabs(~Pclass+Sex, data=train2)
+# print("Tabla de contingencia de sex vs. Pclass")
+# tabla_contingencia
+# #test de independencia
+# chisq.test(tabla_contingencia)
+# #Cálculo de odds ratio
+# my_odds_ratio <- with(train2, (tabla_contingencia[1,1]*tabla_contingencia[2,2])/(tabla_contingencia[1,2]*tabla_contingencia[2,1]))
+# print("Odds ratio de sex vs. Pclass")
+# my_odds_ratio
+# #Gráfico de correlación entre variables
+# chisqresult <- chisq.test(tabla_contingencia, correct = FALSE)
+# corrplot(chisqresult$residuals, is.cor = FALSE)
 
 # #"Pclass","Sex","SibSp","Parch","Fare","Embarked","Titulo",'FamilyIDTKGrouped','IsMother','LoneWolfs',"Age",'TktNum'
 # x1 <- train2$Pclass
@@ -2106,21 +2129,21 @@ concordance(train2$Survived ~ predicciones)
 confMatOrigData<-confusion(train2$Survived,predicciones)
 print('Matriz de confusion a partir de los datos originales')
 confMatOrigData
-print('Matriz de confusion a partir de los valores del modelo')
-confMat<-confusion(mymod3$y, fitted(mymod3))
-confMat
+# print('Matriz de confusion a partir de los valores del modelo')
+# confMat<-confusion(mymod3$y, fitted(mymod3))
+# confMat
 
 
 #Calculo de la OR con la variable continua en el modelo a partir de los coeficientes
 print('Odds ratio calculadas a partir de los coeficientes')
 exp(coef(mymod3))
 #Calculo de los intervalos de ocnfianza con la variable continua en el modelo a partir de los coeficientes
-print('Intervalos de confianza a partir de los coeficientes')
+#print('Intervalos de confianza a partir de los coeficientes')
 #si hay factores con ciertos niveles loquea
 #exp(confint(mymod3))
 #comprobamos con funcion 
-library(questionr)
-print('Odds ratio calculadas a partir de una funcion para comprobación')
+# library(questionr)
+# print('Odds ratio calculadas a partir de una funcion para comprobación')
 #si hay factores con ciertos niveles loquea
 #odds.ratio(mymod3)
 
@@ -2139,7 +2162,7 @@ print('Odds ratio calculadas a partir de una funcion para comprobación')
 #library(ResourceSelection)
 hl<-hoslem.test(mymod3$y,fitted(mymod3))
 hl
-#This gives p=0.69, indicating no evidence of poor fit. This is good, since here we know the model is indeed correctly specified. We can also obtain a table of observed vs expected, from our hl object:
+#This gives p=0.047, indicating some evidence of poor fit. This is good, since here we know the model is indeed correctly specified. We can also obtain a table of observed vs expected, from our hl object:
 cbind(hl$observed,hl$expected)
 
 ##2.5. Curva ROC
@@ -2151,7 +2174,11 @@ plotROC(mymod3$y,fitted(mymod3))
 
 ## Prediccion por redes neuronales y análisis de componetes principales
 
-```{r pruebas_predict_caret, size="small"}
+Aquí usamos una red neuronal que incluye un análisis de componentes principales(pcaNNet). Hemos probado a realizar los cálculos con todo el dataset para ver si el análisis de componentes principales obtenía un buen resultado, pero no fue así. Usando todo el dataset solo obtuvimos un 0.72 en Kaggle.
+
+Después optamos por usar alguno de los conjuntos de variables selecionados en el análisis y obtuvimos mejores resultados, llegando a 0.784.
+
+```{r pruebas_predict_caret, size="small", echo=FALSE}
 
 # # Partimos el dataset en los conjuntos iniciales de train y test.
 # trainCARET <- muestra[1:891,-c(4,9,11,13,14,20,54)]
@@ -2354,9 +2381,20 @@ write.csv(nnModelTest, 'Pred_nnModel.csv',row.names = FALSE)
 write.csv(pcaNNModelTest, 'Pred_pcaNNModel.csv',row.names = FALSE)
 
 ```
+
 # 5. Representación de los resultados a partir de tablas y gráficas.
+
+No se nos ocurre como representar los resultados obtenidos, ya que no sabemos nada más que el porcentaje de acierto que nos facilita Kaggle.
+Hemos usado las gráficas en las diferentes fases del proceso.
 ```{r representacion_grafica_y_tabular, size="small"}
 
 
 ```
+
 # 6. Resolución del problema. A partir de los resultados obtenidos, ¿cuáles son las conclusiones? ¿Los resultados permiten responder al problema?
+
+Las conclusiones obtenidas son que los procesos automáticos para selección de variables no son tan buenos como pensábamos, puede ser que por no tener experiencia con ellos estemos haciendo algo mal o simplemente que las variables que obtuvimos no son lo suficientemente explicativas para obtener mejores resultados.  
+
+Sobra decir que por toda la literatura que hay acerca de esta competición, hemos visto métodos de predicción que obtienen mejores resultados que los nuestros, pero decidimos probar por nuestra cuenta para ver hasta donde podíamos llegar. Inicialmente nos ha costado que todo simplemente funcionase, pero hemos aprendido bastante y poco a poco hemos mejorado nuestros conocimientos de las técnicas que hemos usado, lo que se ha ido reflejando en una mejoría en el porcentaje de éxito.  
+Si dispusiesemos de algo más de tiempo supongo que podríamos haber superado la barrera del 80%, probablemente lo hagamos próximamente, pero ya no será como parte de la práctica.
+

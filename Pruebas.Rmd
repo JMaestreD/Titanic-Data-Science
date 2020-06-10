@@ -1525,14 +1525,17 @@ varImpPlot(rfModel)
 #train2 <- muestra[1:891,c('PassengerId','Survived',"FareIndividualBySex","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass")] #83.5%
 #test2 <- muestra[892:1309,c('PassengerId','Survived',"FareIndividualBySex","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass")]
 
-train2 <- muestra[1:891,c('PassengerId','Survived',"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass")] #83.58%
-test2 <- muestra[892:1309,c('PassengerId','Survived',"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass")]
+#train2 <- muestra[1:891,c('PassengerId','Survived',"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass")] #83.58%
+#test2 <- muestra[892:1309,c('PassengerId','Survived',"FamilyIDTKGrouped","Titulo","FareIndividual","IsMother","LoneWolfs","youngTravelAl","Age","Embarked","Pclass")]
 
 #train2 <- muestra[1:891,c('PassengerId','Survived',"FareIndividualBySexGroups","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass",'FarePw2')]  #82.8
 #test2 <- muestra[892:1309,c('PassengerId','Survived',"FareIndividualBySexGroups","IsMother","LoneWolfs","TicketFreq","ageGroupsByCut","Embarked","Pclass",'FarePw2')]
 
-#train2 <- muestra[1:891,c('PassengerId','Survived','FareIndividualBySex','Titulo','KNNAges','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy')] #82%-80%
-#test2 <- muestra[892:1309,c('PassengerId','Survived','FareIndividualBySex','Titulo','KNNAges','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy')]
+train2 <- muestra[1:891,c('PassengerId','Survived','FareIndividualBySex','Titulo','ageGroupsByCut','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy')] #Kaggle0.79
+test2 <- muestra[892:1309,c('PassengerId','Survived','FareIndividualBySex','Titulo','ageGroupsByCut','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy')]
+
+# train2 <- muestra[1:891,c('PassengerId','Survived','FareIndividualBySex','Titulo','KNNAges','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy')] #82%-80% Kaggle0.77
+# test2 <- muestra[892:1309,c('PassengerId','Survived','FareIndividualBySex','Titulo','KNNAges','FamilyIDTKGrouped','PclassFactor','tamanoticket','Embarked','LoneWolfsDummy','IsMotherDummy','youngTravelAlDummy')]
 
 #train2 <- muestrascaledumy[1:891,c('PassengerId','Survived','FareIndividualBySex','Titulo','Mr','KNNAges','FIBSG14','FamilyIDTKGrouped','Pclass','tamanoticket','FIBSG51','Mrs','Miss')]
 #test2 <- muestrascaledumy[892:1309,c('PassengerId','Survived','FareIndividualBySex','Titulo','Mr','KNNAges','FIBSG14','FamilyIDTKGrouped','Pclass','tamanoticket','FIBSG51','Mrs','Miss')]
@@ -1564,7 +1567,7 @@ varImpPlot(fit)
 Prediction <- predict(fit, test2)
 submittest3 <- data.frame(PassengerId = test2$PassengerId, Survived = Prediction)
 #pasamos dataset a fichero
-#write.csv(submittest3, file = "Pred_Rforest.csv", row.names = FALSE)
+write.csv(submittest3, file = "Pred_Rforest.csv", row.names = FALSE)
 
 #Vamos a comparar el resultado con las observaciones de la variable y construir una matriz de acierto
 t_cont_prediccion_contra_observación<- xtabs(~test3Survival+submittest3$Survived)
@@ -1608,9 +1611,9 @@ fit <- cforest(as.factor(Survived) ~ .,
                data = train4[,-1], controls=cforest_unbiased(ntree=2000, mtry=3)) 
 # hacemos la predicción y la guardamos en formato de envio 
 Prediction <- predict(object = fit, newdata=test4, OOB=TRUE, type = "response")
-submittest3cf <- data.frame(PassengerId = test3$PassengerId, Survived = Prediction)
+submittest3cf <- data.frame(PassengerId = test4$PassengerId, Survived = Prediction)
 #escribimos fichero
-#write.csv(submit, file = "ciforest.csv", row.names = FALSE)
+write.csv(submittest3cf, file = "Pred_ciforest.csv", row.names = FALSE)
 #Vamos a comparar el resultado con las observaciones de la variable y construir una matriz de acierto
 t_cont_prediccion_contra_observación<- xtabs(~test4Survival+submittest3cf$Survived)
 print("Tabla de contingencia de predicciones survival contra observaciones survival")
@@ -2278,10 +2281,6 @@ pcaNNModel <- caret::train(Survived ~ ., data = training, trControl = train_cont
                  method = 'pcaNNet', tuneGrid = nnGrid,
                  metric = 'ROC', trace = FALSE)
 
-#models <- list(nn = nnModel, pcann = pcaNNModel)
-# models_preds <- lapply(models, predict, newdata = testing, type = 'prob')
-# models_probs <- as.data.frame(sapply(models_preds, function(df){1 - df$N}))
-# models_probs$Survived <- training$Survived
 nnModelTest <- data.frame(PassengerId = testing$PassengerId,
                               Survived = ifelse(predict(nnModel, testing) == 'Si',1,0))
 pcaNNModelTest <- data.frame(PassengerId = 892:1309,
